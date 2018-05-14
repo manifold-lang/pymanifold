@@ -3,10 +3,10 @@ Python implementation of the Manifold microfluidic simulation language
 
 This library allows you to design a microfluidic circuit as a schematic consisting of:
 
-* Nodes - consist of elementary devices such as logic gates or fluid input channels
-* Connections - connect two nodes together
-* Ports - a type of node that allows for the input or output of fluids
-* Constraints - describe design rules or goals that are too complex to be described
+* **Nodes** - consist of elementary devices such as logic gates or fluid input channels
+* **Connections** - connect two nodes together
+* **Ports** - a type of node that allows for the input or output of fluids
+* **Constraints** - describe design rules or goals that are too complex to be described
 in terms of the other three primitives
 
 Once the circuit has been designed you can call solve on the schematic which will use
@@ -53,4 +53,4 @@ Explain how to use the library
 ## License
 
 This project is licensed under the GNU General Public License v3.0 - see the
-[LICENSE.md](LICENSE.md) file for details
+[LICENSE](LICENSE) file for details
