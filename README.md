@@ -39,12 +39,33 @@ your python3 site packages (C:\\python35\Lib\site-packages on Windows,
 
 ## Usage
 
-Explain how to use the library
+The code to create a simple T-Junction droplet generator should look approximately as
+follows, but is still early in development:
+
+```
+import pymanifold as pymf
+
+sch = pymf.Schematic()
+in1 = pymf.Input('water')
+in2 = pymf.Input('oil')
+out1 = pymf.Output()
+n1 = pymf.Node('t-junc')
+# syntax: sch.rect_channel(length, width, height, input, output)
+sch.rect_channel(100, 10, 10, in1, n1, phase='continuous')
+sch.rect_channel(50, 5, 5, in2, n1, phase='dispersed')
+sch.rect_channel(200, 10, 10, n1, out1, phase='output')
+
+sch.solve()
+
+# Return: Solution found, range of flow rates: in1: [10, 40]ul/min, in2: [1, 3.2]ul/min
+```
+
 
 ## Authors
 
 * **Josh Reid** - *Creator of Python implementation* - [jsreid13](https://github.com/jsreid13)
 * **Murphy Berzish** - *Creator of Manifold* - [mtrberzi](https://github.com/mtrberzi)
+* **Derek Rayside** - *Owner of Manifold* - [drayside](https://github.com/drayside)
 * **Tyson Andre** - *Contributor to Manifold* - [TysonAndre](https://github.com/TysonAndre)
 * **Max Chen** - *Contributor to Manifold* - [maxqchen](https://github.com/maxqchen)
 * **Nik Klassen** - *Contributor to Manifold* - [nikklassen](https://github.com/nikklassen)
