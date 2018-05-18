@@ -1,5 +1,9 @@
-import sys
-from pysmt.shortcuts import Symbol, Int, Plus, Times, Div, Pow, is_sat
+from pprint import pprint
+import math
+from pysmt.shortcuts import Symbol, Plus, Times, Div, Pow, Equals
+from pysmt.shortcuts import Minus, GE, LE, Real, Solver
+from pysmt.typing import INT
+from pysmt.logics import QF_NRA
 
 
 class Schematic():
@@ -18,6 +22,7 @@ class Schematic():
         self.connections = {}
         self.channels = {}
         self.nodes = {}
+        self.exprs = []
 
         # Add new node types and their validation method to this dict
         # to maintain consistent checking across all methods
@@ -27,28 +32,39 @@ class Schematic():
         self.translate_nodes = {'t-junction': self.translate_tjunc
                                 }
 
-    # should length, width, height have default values to simplify startup
-    def channel(self, shape, length, width, height, port_from, port_to, phase='None'):
+    def channel(self,
+                shape,
+                min_length,
+                width,
+                height,
+                port_from,
+                port_to,
+                phase='None'):
         """Create new connection between two nodes/ports with attributes
         consisting of the dimensions of the channel to be used to create the
         SMT2 equation to calculate solvability of the circuit
+
+        shape - shape of cross section of the channel
+        min_length - constaint the chanell to be at least this long
+        width - width of the cross section of the channel
+        height - height of the cross section of the channel
+        port_from - port where fluid comes into the channel from
+        port_to - port at the end of the channel where fluid exits
+        phase - for channels connecting to a T-junction this must be either
+                continuous, dispersed or output
         """
         valid_shapes = ("rectangle")
         # Checking that arguments are valid
         if not isinstance(shape, str) or not isinstance(port_from, str)\
                 or not isinstance(port_to, str):
-            tb = sys.exc_info()[2]
             raise TypeError("shape of channel, input and output ports must be\
-                    strings").with_traceback(tb)
+                    strings")
         if shape not in valid_shapes:
-            tb = sys.exc_info()[2]
             raise ValueError("Valid channel shapes are: %s"
-                             % valid_shapes).with_traceback(tb)
+                             % valid_shapes)
         if port_from not in self.nodes.keys():
-            tb = sys.exc_info()[2]
             raise ValueError("port_from node doesn't exist")
         elif port_to not in self.nodes.keys():
-            tb = sys.exc_info()[2]
             raise ValueError("port_to node doesn't exist")
 
         # If that fluid entry node already exists then that means there is
@@ -56,110 +72,347 @@ class Schematic():
         try:
             # Can't have two of the same channel
             if port_to in self.connections[port_from]:
-                tb = sys.exc_info()[2]
-                raise ValueError("Channel already exists between these nodes")\
-                    .with_traceback(tb)
+                raise ValueError("Channel already exists between these nodes")
             self.connections[port_from].append(port_to)
         except KeyError:
             self.connections[port_from] = [port_to]
 
         # Add the information about that connection to another dict
-        # TODO this needs to have both from and to ports to make it unique,
-        # but checking for keys would require checking both combinations,
-        # refactor the code to make port, node and channel objects instead of methods!
-        self.channels[port_from] = {'length': length,
-                                    'width': width,
-                                    'height': height,
-                                    'phase': phase
-                                    }
+        self.channels[port_from+port_to] = {'length': min_length,
+                                            'width': width,
+                                            'height': height,
+                                            'phase': phase.lower(),
+                                            'len_sym': Symbol(port_from
+                                                              + port_to
+                                                              + '_len')
+                                            }
         return
 
-    def port(self, name, direction, viscosity=1):
+    # TODO: Should X and Y be forced to be >0 for triangle area calc?
+    def port(self, name, design, pressure, flow_rate, X, Y, viscosity=1):
         """Create new port where fluids can enter or exit the circuit, viscosity
-        and directions needs to be specified
+        and designs needs to be specified
         """
         # Checking that arguments are valid
-        if not isinstance(name, str) or not isinstance(direction, str):
-            tb = sys.exc_info()[2]
-            raise TypeError("name and direction must be strings")\
-                .with_traceback(tb)
+        if not isinstance(name, str) or not isinstance(design, str):
+            raise TypeError("name and design must be strings")
+        if not isinstance(pressure, (int, float)):
+            raise TypeError("pressure must be a number")
+        if not isinstance(flow_rate, (int, float)):
+            raise TypeError("flow rate must be a number")
+        if not isinstance(X, (int, float)) or\
+                not isinstance(Y, (int, float)):
+            raise TypeError("X and Y pos must be numbers")
         if name in self.nodes.keys():
-            tb = sys.exc_info()[2]
-            raise ValueError("Must provide a unique name")\
-                .with_traceback(tb)
+            raise ValueError("Must provide a unique name")
 
         # Ports are stores with nodes because ports are just a specific type of
         # node that has a constant flow rate
-        if direction.lower() in self.translate_ports.keys():
-            self.nodes[name] = [direction.lower(), viscosity]
+        if design.lower() in self.translate_ports.keys():
+            self.nodes[name] = {'design': design.lower(),
+                                'viscosity': viscosity,
+                                'pressure': pressure,
+                                'position': [X, Y],
+                                'position_sym': [Symbol(name+'_X', INT),
+                                                 Symbol(name+'_Y', INT)]
+                                }
         else:
-            tb = sys.exc_info()[2]
-            raise ValueError("direction must be %s" %
-                             self.translate_ports.keys()).with_traceback(tb)
+            raise ValueError("design must be %s" % self.translate_ports.keys())
 
-    def node(self, name, design):
+    def node(self, name, design, pressure, X, Y):
         """Create new node where fluids merge or split, design of the node
         (T-junction, Y-junction, cross, etc.) needs to be specified
         """
         # Checking that arguments are valid
         if not isinstance(name, str) or not isinstance(design, str):
-            tb = sys.exc_info()[2]
-            raise TypeError("design must be a string")\
-                .with_traceback(tb)
+            raise TypeError("name/design must be strings")
+        if not isinstance(pressure, (int, float)):
+            raise TypeError("pressure must be a number")
+        if not isinstance(X, (int, float)) or\
+                not isinstance(Y, (int, float)):
+            raise TypeError("X and Y pos must be numbers")
         if name in self.nodes.keys():
-            tb = sys.exc_info()[2]
-            raise ValueError("Must provide a unique name")\
-                .with_traceback(tb)
+            raise ValueError("Must provide a unique name")
 
         if design.lower() in self.translate_nodes.keys():
-            self.nodes[name] = [design.lower()]
+            self.nodes[name] = {'design': design.lower(),
+                                'pressure': pressure,
+                                'position': [X, Y],
+                                'position_sym': [Symbol(name+'_X', INT),
+                                                 Symbol(name+'_Y', INT)]
+                                }
         else:
-            tb = sys.exc_info()[2]
             raise ValueError("design name not valid, only %s are valid" %
-                             self.translate_nodes.keys()).with_traceback(tb)
+                             self.translate_nodes.keys())
 
     def translate_input(self, name):
         # Validate input
         num_connections = len(self.connections[name])
         if num_connections <= 0:
-            tb = sys.exc_info()[2]
-            raise ValueError("Port %s must have 1 or more connections" % name)\
-                .with_traceback(tb)
+            raise ValueError("Port %s must have 1 or more connections" % name)
 
     def translate_output(self, name):
-        # Validate input
-        num_connections = len(self.connections[name])
-        if num_connections <= 0:
-            tb = sys.exc_info()[2]
-            raise ValueError("Port %s must have 1 or more connections" % name)\
-                .with_traceback(tb)
+        # Validate output
+        for port_in, ports_out in self.connections.items():
+            if name in ports_out:
+                return True
+        raise ValueError("Port %s must have 1 or more connections" % name)
 
-    def translate_tjunc(self, name):
+    def translate_tjunc(self, name, critCrossingAngle=0.5):
         # Validate input
-        num_connections = len(self.connections[name]) +\
-            len([key for key, value in self.connections.items()
-                if name in value])
+        if len(self.connections[name]) > 1:
+            raise ValueError("T-Junction must only have one output")
+        output_node = self.connections[name][0]
+        outputs = [key for key, value in self.connections.items()
+                   if name in value]
+        num_connections = len(outputs) + 1  # +1 to include the output node
         if num_connections != 3:
-            tb = sys.exc_info()[2]
-            raise ValueError("T-junction %s must have 3 connections" % name)\
-                .with_traceback(tb)
+            raise ValueError("T-junction %s must have 3 connections" % name)
 
-        # TODO: May want to refactor code to make nodes objects that have a
-        # getFrom and getTo method to save iterating over list of connections
-        # however this would require a separate method for creating JSON IR
-        epsilon = Symbol('epsilon', long)
-        output = self.connections[name]
-        for key, value in self.connections.items():
-            if name in value:
-                if self.channels[key]['phase'] == 'continuous':
-                    continuous = key
-                elif self.channels[key]['phase'] == 'dispersed':
-                    dispersed = key
+        junction_node = name
+        continuous_node = ''
+        dispersed_node = ''
+        output_channel = self.channels[name+output_node]
+        for node_from, node_to_list in self.connections.items():
+            if name in node_to_list:
+                if self.channels[node_from+name]['phase'] == 'continuous':
+                    continuous_node = node_from
+                    continuous_channel = self.channels[continuous_node+name]
+                    # assert width and height to be equal to output
+                    self.exprs.append(Equals(continuous_channel['width'],
+                                             output_channel['width']
+                                             ))
+                    self.exprs.append(Equals(continuous_channel['height'],
+                                             output_channel['height']
+                                             ))
+                elif self.channels[node_from+name]['phase'] == 'dispersed':
+                    dispersed_node = node_from
+                    dispersed_channel = self.channels[dispersed_node+name]
+                    # Assert that only the height of channel be equal
+                    self.exprs.append(Equals(dispersed_channel['height'],
+                                             output_channel['height']
+                                             ))
                 else:
-                    tb = sys.exc_info()[2]
                     raise ValueError("Invalid phase for T-junction: %s" %
-                                     name).with_traceback(tb)
+                                     name)
 
+        # Epsilon, sharpness of T-junc, must be greater than 0
+        epsilon = Symbol('epsilon', long)
+        self.exprs.append(GE(epsilon, Real(0)))
+
+        # Pressure at each of the 4 nodes must be equal
+        self.exprs.append(Equals(self.nodes[name]['pressure'],
+                                 self.nodes[continuous_node]['pressure']
+                                 ))
+        self.exprs.append(Equals(self.nodes[name]['pressure'],
+                                 self.nodes[dispersed_node]['pressure']
+                                 ))
+        self.exprs.append(Equals(self.nodes[name]['pressure'],
+                                 self.nodes[output_node]['pressure']
+                                 ))
+
+        # Flow rate in and out of the intersection must be equal
+        flow_in = self.nodes[continuous_node]['flow_rate']\
+                  + self.nodes[dispersed_node]['flow_rate']
+        flow_out = self.nodes[output_node]['flow_rate']
+        self.exprs.append(Equals(flow_in, flow_out))
+
+        # Viscosity in continous phase equals viscosity at output
+        self.exprs.append(Equals(self.nodes[continuous_node]['viscosity'],
+                                 self.nodes[output_node]['viscosity']
+                                 ))
+
+        # Droplet volume in channel equals calculated droplet volume
+        # TODO: Manifold also has a table of constraints in the Schematic and
+        # sets ChannelDropletVolume equal to dropletVolumeConstraint, however
+        # the constraint is void (new instance of RealTypeValue) and I think
+        # could conflict with calculated value, so ignoring it for now but
+        # may be necessary to add at a later point if I'm misunderstand why
+        # its needed
+        v_output = output_channel['droplet_volume']
+        self.exprs.append(Equals(v_output,
+                                 self.calculate_droplet_volume(
+                                     output_channel['height'],
+                                     output_channel['width'],
+                                     dispersed_channel['width'],
+                                     epsilon,
+                                     dispersed_channel['flow_rate'],
+                                     continuous_channel['flow_rate']
+                                 )))
+
+        # Placement Translation set methods here
+
+        # Retrieve value of position for each node
+        xC = continuous_node['position'][0]
+        yC = continuous_node['position'][1]
+        xO = output_node['position'][0]
+        yO = output_node['position'][1]
+        xJ = junction_node['position'][0]
+        yJ = junction_node['position'][1]
+        xD = dispersed_node['position'][0]
+        yD = dispersed_node['position'][1]
+        # Retrieve symbols for each node
+        nxC = continuous_node['position_sym'][0]
+        nyC = continuous_node['position_sym'][1]
+        nxO = output_node['position_sym'][0]
+        nyO = output_node['position_sym'][1]
+        nxJ = junction_node['position_sym'][0]
+        nyJ = junction_node['position_sym'][1]
+        nxD = dispersed_node['position_sym'][0]
+        nyD = dispersed_node['position_sym'][1]
+        # Retrieve symbols for channel lengths
+        lenC = self.channels[continuous_node+junction_node]['len_sym']
+        lenO = self.channels[junction_node+output_node]['len_sym']
+        lenD = self.channels[dispersed_node+junction_node]['len_sym']
+
+        # Assert positions equal their provided position, controlPointPlacement
+        self.exprs.append(Equals(nxC, xC))
+        self.exprs.append(Equals(nyC, yC))
+        self.exprs.append(Equals(nxO, xO))
+        self.exprs.append(Equals(nyO, yO))
+        self.exprs.append(Equals(nxJ, xJ))
+        self.exprs.append(Equals(nyJ, yJ))
+        self.exprs.append(Equals(nxD, xD))
+        self.exprs.append(Equals(nyD, yD))
+
+        # Constrain that continuous and output ports are in a straight line by
+        # setting the area of the triangle formed between those two points and
+        # the center of the t-junct to be 0
+        # Formula for area of a triangle given 3 points
+        # x_i (y_p − y_j ) + x_p (y_j − y_i ) + x_j (y_i − y_p ) / 2
+        self.exprs.append(Equals(Real(0),
+                                 Div(Plus(Times(nxC,
+                                                Minus(nyJ, nyO)
+                                                ),
+                                          Plus(Times(nxJ,
+                                                     Minus(nyO, nyC)
+                                                     ),
+                                               Times(nxO,
+                                                     Minus(nyC, nyJ)
+                                                     ))),
+                                     Real(2)
+                                     )))
+
+        # Assert critical angle is <= calculated angle
+        cosine_squared_theta_crit = Real(math.cos(
+            math.radian(critCrossingAngle))**2)
+        # Continuous to dispersed
+        self.exprs.append(LE(cosine_squared_theta_crit,
+                             self.cosine_law_crit_angle([nxC, nyC],
+                                                        [nxJ, nyJ],
+                                                        [nxD, nyD]
+                                                        )))
+        # Continuous to output
+        self.exprs.append(LE(cosine_squared_theta_crit,
+                             self.cosine_law_crit_angle([nxC, nyC],
+                                                        [nxJ, nyJ],
+                                                        [nxO, nyO]
+                                                        )))
+        # Output to dispersed
+        self.exprs.append(LE(cosine_squared_theta_crit,
+                             self.cosine_law_crit_angle([nxO, nyO],
+                                                        [nxJ, nyJ],
+                                                        [nxD, nyD]
+                                                        )))
+
+        # Assert channel length equal to the sum of the squares of the legs
+        self.exprs.append(self.pythagorean_length([nxC, nyC], [nxJ, nyJ], lenC))
+        self.exprs.append(self.pythagorean_length([nxD, nyD], [nxJ, nyJ], lenD))
+        self.exprs.append(self.pythagorean_length([nxJ, nyJ], [nxO, nyO], lenO))
+
+    def pythagorean_length(node1, node2, ch_len):
+        """Use Pythagorean theorem to assert that the channel length
+        (hypoteneuse) squared is equal to the legs squared so channel
+        length is solved for
+        """
+        side_a = Minus(node1[0], node2[0])
+        side_b = Minus(node1[1], node2[1])
+        a_squared = Pow(side_a, Real(2))
+        b_squared = Pow(side_b, Real(2))
+        a_squared_plus_b_squared = Plus(a_squared, b_squared)
+        c_squared = Pow(ch_len, Real(2))
+        return Equals(a_squared_plus_b_squared, c_squared)
+
+    def cosine_law_crit_angle(node1, node2, node3):
+        """Use cosine law to find cos^2(theta) between three points
+        node1---node2---node3 to assert that it is less than cos^2(thetaC)
+        where thetaC is the critical crossing angle
+        """
+        # Lengths of channels
+        aX = Minus(node1[0], node2[0])
+        aY = Minus(node1[1], node2[1])
+        bX = Minus(node3[0], node2[0])
+        bY = Minus(node3[1], node2[1])
+        # Dot products between each channel
+        a_dot_b_squared = Pow(Plus(Times(aX, bX),
+                                   Times(aY, bY)
+                                   ),
+                              Real(2)
+                              )
+        a_squared_b_squared = Times(Plus(Times(aX, aX),
+                                         Times(aY, aY)
+                                         ),
+                                    Plus(Times(bX, bX),
+                                         Times(bY, bY)
+                                         ),
+                                    )
+        return Div(a_dot_b_squared, a_squared_b_squared)
+
+    def calculate_droplet_volume(self, h, w, wIn, epsilon, qD, qC):
+        """From paper DOI:10.1039/c002625e.
+        h=height of channel
+        w=width of continuous/output channel
+        wIn=width of dispersed_channel
+        epsilon=0.414*radius of rounded edge where channels join
+        qD=flow rate in dispersed_channel
+        qC=flow rate in continuous_channel
+        """
+        q_gutter = Real(0.1)
+        # normalizedVFill = 3pi/8 - (pi/2)(1 - pi/4)(h/w)
+        v_fill_simple = Minus(
+                Times(Real(3, 8), Real(math.pi)),
+                Times(Times(
+                            Div(Real(math.pi), Real(2)),
+                            Minus(Real(1),
+                                  Div(Real(math.pi), Real(4)))),
+                      Div(h, w)))
+
+        hw_parallel = Div(Times(h, w), Plus(h, w))
+
+        # r_pinch = w+((wIn-(hw_parallel - eps))+sqrt(2*((wIn-hw_parallel)*(w-hw_parallel))))
+        r_pinch = Plus(w,
+                       Plus(Minus(
+                                  wIn,
+                                  Minus(hw_parallel, epsilon)),
+                            Pow(Times(
+                                      Real(2),
+                                      Times(Minus(wIn, hw_parallel),
+                                            Minus(w, hw_parallel)
+                                            )),
+                                Real(0.5))))
+        r_fill = w
+        alpha = Times(Minus(
+                            Real(1),
+                            Div(Real(math.pi), Real(4))
+                            ),
+                      Times(Pow(
+                                Minus(Real(1), q_gutter),
+                                Real(-1)
+                                ),
+                            Plus(Minus(
+                                       Pow(Div(r_pinch, w), Real(2)),
+                                       Pow(Div(r_fill, w), Real(2))
+                                       ),
+                                 Times(Div(Real(math.pi), Real(4)),
+                                       Times(Minus(
+                                                   Div(r_pinch, w),
+                                                   Div(r_fill, w)
+                                                   ),
+                                             Div(h, w)
+                                             )))))
+
+        return Times(Times(h, Times(w, w)),
+                     Plus(v_fill_simple, Times(alpha, Div(qD, qC))))
 
     def translate_schematic(self):
         """Validates that each node has the correct input and output
@@ -167,11 +420,38 @@ class Schematic():
         """
         for name, attributes in self.nodes.items():
             try:
-                self.translate_nodes[name](name)
+                self.translate_nodes[self.nodes[name]['design']](name)
             except KeyError:
-                self.translate_ports[name](name)
+                self.translate_ports[self.nodes[name]['design']](name)
+        print(self.exprs)
 
     def invoke_backend(self):
+        # model = get_model(self.exprs)
+        for f in self.exprs:
+            with Solver(name="z3", logic=QF_NRA) as s:
+                s.add_assertion(f)
+
+                check = s.solve()
+                self.assertTrue(check)
+
+                # Ask single values to the solver
+                subs = {}
+                for d in f.get_free_variables():
+                    m = s.get_value(d)
+                    subs[d] = m
+
+                simp = f.substitute(subs).simplify()
+                # self.assertEqual(simp, TRUE(), "%s -- %s :> %s" % (f, subs, simp))
+
+                # Ask the eager model
+                subs = {}
+                model = s.get_model()
+                for d in f.get_free_variables():
+                    m = model.get_value(d)
+                    subs[d] = m
+
+                simp = f.substitute(subs).simplify()
+                # self.assertEqual(simp, TRUE())
 
     def solve(self):
         """Create the SMT2 equation for this schematic outlining the design
@@ -181,4 +461,3 @@ class Schematic():
         # TODO convert schematic to SMT2 expressions method
         self.translate_schematic()
         return self.invoke_backend()
-
