@@ -39,23 +39,34 @@ your python3 site packages (C:\\python35\Lib\site-packages on Windows,
 
 ## Usage
 
-The code to create a simple T-Junction droplet generator should look approximately as
-follows, but is still early in development:
+The code to create a simple T-Junction droplet generator is as follows found in this
+[test script](src/test.py), but is still in development:
 
 ```
-import pymanifold as pymf
-
 sch = pymf.Schematic()
-in1 = pymf.Input('water')
-in2 = pymf.Input('oil')
-out1 = pymf.Output()
-n1 = pymf.Node('t-junc')
-# syntax: sch.rect_channel(length, width, height, input, output)
-sch.rect_channel(100, 10, 10, in1, n1, phase='continuous')
-sch.rect_channel(50, 5, 5, in2, n1, phase='dispersed')
-sch.rect_channel(200, 10, 10, n1, out1, phase='output')
+#       D
+#       |
+#   C---N---O
+continuous_node = 'continuous'
+dispersed_node = 'dispersed'
+output_node = 'out'
+junction_node = 't-j'
+# Continuous and output node should have same flow rate
+# syntax: sch.port(name, design, pressure, flow_rate, X_pos, Y_pos)
+sch.port(continuous_node, 'input', 2, 5, 0, 0)
+sch.port(dispersed_node, 'input', 2, 2, 1, 1)
+sch.port(output_node, 'output', 2, 5, 2, 0)
+sch.node(junction_node, 't-junction', 2, 1, 0)
+# syntax: sch.channel(shape, min_length, width, height, input, output)
+sch.channel('rectangle', 0.5, 0.1, 0.1, continuous_node,
+            junction_node, phase='continuous')
+sch.channel('rectangle', 0.5, 0.1, 0.1, dispersed_node,
+            junction_node, phase='continuous')
+sch.channel('rectangle', 0.5, 0.1, 0.1, junction_node,
+            output_node, phase='continuous')
 
 sch.solve()
+
 
 # Return: Solution found, range of flow rates: in1: [10, 40]ul/min, in2: [1, 3.2]ul/min
 ```
