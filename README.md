@@ -57,7 +57,7 @@ sch.port(continuous_node, 'input', 2, 5, 0, 0)
 sch.port(dispersed_node, 'input', 2, 2, 1, 1)
 sch.port(output_node, 'output', 2, 5, 2, 0)
 sch.node(junction_node, 't-junction', 2, 1, 0)
-# syntax: sch.channel(shape, min_length, width, height, input, output)
+# syntax: sch.channel(shape, min length, width, height, input, output)
 sch.channel('rectangle', 0.5, 0.1, 0.1, continuous_node,
             junction_node, phase='continuous')
 sch.channel('rectangle', 0.5, 0.1, 0.1, dispersed_node,
@@ -71,6 +71,16 @@ sch.solve()
 # Return: Solution found, range of flow rates: in1: [10, 40]ul/min, in2: [1, 3.2]ul/min
 ```
 
+## Development
+
+This project is still in development, features that need to be added are:
+
+* Add an elecrophoretic cross as a new node type with voltages at two ends
+* Feature to output electrical characteristics of chip to maple
+* Create a to_json method to convert designed schematic to a json file following Manifold IR grammar
+* Gather a database of real world microfluidic chip designs and information about their output
+* Implement a machine learning algorithm on this database to improve the library's accuracy in
+determining if different designed will work
 
 ## Authors
 
