@@ -1,8 +1,8 @@
 from pprint import pprint
 import math
-from pysmt.shortcuts import Symbol, Plus, Times, Div, Pow, Equals
-from pysmt.shortcuts import Minus, GE, LE, Real, Solver
-from pysmt.typing import INT
+from pysmt.shortcuts import Symbol, Plus, Times, Div, Pow, Equals, Real
+from pysmt.shortcuts import Minus, GE, LE, Real, Solver, And, is_sat, get_model
+from pysmt.typing import INT, REAL
 from pysmt.logics import QF_NRA
 
 
@@ -35,8 +35,8 @@ class Schematic():
     def channel(self,
                 shape,
                 min_length,
-                width,
-                height,
+                min_width,
+                min_height,
                 port_from,
                 port_to,
                 phase='None'):
@@ -59,6 +59,10 @@ class Schematic():
                 or not isinstance(port_to, str):
             raise TypeError("shape of channel, input and output ports must be\
                     strings")
+        if not isinstance(min_length, (int, float))\
+                or not isinstance(min_width, (int, float))\
+                or not isinstance(min_height, (int, float)):
+            raise TypeError("length, width and height must be numbers")
         if shape not in valid_shapes:
             raise ValueError("Valid channel shapes are: %s"
                              % valid_shapes)
@@ -78,27 +82,43 @@ class Schematic():
             self.connections[port_from] = [port_to]
 
         # Add the information about that connection to another dict
-        self.channels[port_from+port_to] = {'length': min_length,
-                                            'width': width,
-                                            'height': height,
+        self.channels[port_from+port_to] = {'length': Symbol(port_from
+                                                             + port_to
+                                                             + '_length',
+                                                             REAL),
+                                            'min_length': min_length,
+                                            'width': Symbol(port_from
+                                                            + port_to
+                                                            + '_width',
+                                                            REAL),
+                                            'min_width': min_width,
+                                            'height': Symbol(port_from
+                                                             + port_to
+                                                             + '_height',
+                                                             REAL),
+                                            'min_height': min_height,
+                                            'droplet_volume': Symbol(port_from
+                                                                     + port_to
+                                                                     + '_Dvol',
+                                                                     REAL),
                                             'phase': phase.lower(),
-                                            'len_sym': Symbol(port_from
-                                                              + port_to
-                                                              + '_len')
                                             }
         return
 
     # TODO: Should X and Y be forced to be >0 for triangle area calc?
-    def port(self, name, design, pressure, flow_rate, X, Y, viscosity=1):
+    # TODO: There are similar arguments for both port and node that could be
+    #       simplified if they were inhereted from a common object
+    def port(self, name, design, min_pressure, min_flow_rate, X, Y,
+             min_viscosity=1):
         """Create new port where fluids can enter or exit the circuit, viscosity
         and designs needs to be specified
         """
         # Checking that arguments are valid
         if not isinstance(name, str) or not isinstance(design, str):
             raise TypeError("name and design must be strings")
-        if not isinstance(pressure, (int, float)):
+        if not isinstance(min_pressure, (int, float)):
             raise TypeError("pressure must be a number")
-        if not isinstance(flow_rate, (int, float)):
+        if not isinstance(min_flow_rate, (int, float)):
             raise TypeError("flow rate must be a number")
         if not isinstance(X, (int, float)) or\
                 not isinstance(Y, (int, float)):
@@ -110,23 +130,27 @@ class Schematic():
         # node that has a constant flow rate
         if design.lower() in self.translate_ports.keys():
             self.nodes[name] = {'design': design.lower(),
-                                'viscosity': viscosity,
-                                'pressure': pressure,
+                                'viscosity': Symbol(name+'_viscosity', REAL),
+                                'min_viscosity': min_viscosity,
+                                'pressure': Symbol(name+'_pressure', REAL),
+                                'min_pressure': min_pressure,
+                                'flow_rate': Symbol(name+'_Q', REAL),
+                                'min_flow_rate': min_flow_rate,
                                 'position': [X, Y],
-                                'position_sym': [Symbol(name+'_X', INT),
-                                                 Symbol(name+'_Y', INT)]
+                                'position_sym': [Symbol(name+'_X', REAL),
+                                                 Symbol(name+'_Y', REAL)]
                                 }
         else:
             raise ValueError("design must be %s" % self.translate_ports.keys())
 
-    def node(self, name, design, pressure, X, Y):
+    def node(self, name, design, min_pressure, X, Y):
         """Create new node where fluids merge or split, design of the node
         (T-junction, Y-junction, cross, etc.) needs to be specified
         """
         # Checking that arguments are valid
         if not isinstance(name, str) or not isinstance(design, str):
             raise TypeError("name/design must be strings")
-        if not isinstance(pressure, (int, float)):
+        if not isinstance(min_pressure, (int, float)):
             raise TypeError("pressure must be a number")
         if not isinstance(X, (int, float)) or\
                 not isinstance(Y, (int, float)):
@@ -136,10 +160,11 @@ class Schematic():
 
         if design.lower() in self.translate_nodes.keys():
             self.nodes[name] = {'design': design.lower(),
-                                'pressure': pressure,
+                                'pressure': Symbol(name+'_pressure', REAL),
+                                'min_pressure': min_pressure,
                                 'position': [X, Y],
-                                'position_sym': [Symbol(name+'_X', INT),
-                                                 Symbol(name+'_Y', INT)]
+                                'position_sym': [Symbol(name+'_X', REAL),
+                                                 Symbol(name+'_Y', REAL)]
                                 }
         else:
             raise ValueError("design name not valid, only %s are valid" %
@@ -197,7 +222,7 @@ class Schematic():
                                      name)
 
         # Epsilon, sharpness of T-junc, must be greater than 0
-        epsilon = Symbol('epsilon', long)
+        epsilon = Symbol('epsilon', REAL)
         self.exprs.append(GE(epsilon, Real(0)))
 
         # Pressure at each of the 4 nodes must be equal
@@ -236,34 +261,34 @@ class Schematic():
                                      output_channel['width'],
                                      dispersed_channel['width'],
                                      epsilon,
-                                     dispersed_channel['flow_rate'],
-                                     continuous_channel['flow_rate']
+                                     self.nodes[dispersed_node]['flow_rate'],
+                                     self.nodes[continuous_node]['flow_rate']
                                  )))
 
         # Placement Translation set methods here
 
         # Retrieve value of position for each node
-        xC = continuous_node['position'][0]
-        yC = continuous_node['position'][1]
-        xO = output_node['position'][0]
-        yO = output_node['position'][1]
-        xJ = junction_node['position'][0]
-        yJ = junction_node['position'][1]
-        xD = dispersed_node['position'][0]
-        yD = dispersed_node['position'][1]
+        xC = Real(self.nodes[continuous_node]['position'][0])
+        yC = Real(self.nodes[continuous_node]['position'][1])
+        xO = Real(self.nodes[output_node]['position'][0])
+        yO = Real(self.nodes[output_node]['position'][1])
+        xJ = Real(self.nodes[junction_node]['position'][0])
+        yJ = Real(self.nodes[junction_node]['position'][1])
+        xD = Real(self.nodes[dispersed_node]['position'][0])
+        yD = Real(self.nodes[dispersed_node]['position'][1])
         # Retrieve symbols for each node
-        nxC = continuous_node['position_sym'][0]
-        nyC = continuous_node['position_sym'][1]
-        nxO = output_node['position_sym'][0]
-        nyO = output_node['position_sym'][1]
-        nxJ = junction_node['position_sym'][0]
-        nyJ = junction_node['position_sym'][1]
-        nxD = dispersed_node['position_sym'][0]
-        nyD = dispersed_node['position_sym'][1]
+        nxC = self.nodes[continuous_node]['position_sym'][0]
+        nyC = self.nodes[continuous_node]['position_sym'][1]
+        nxO = self.nodes[output_node]['position_sym'][0]
+        nyO = self.nodes[output_node]['position_sym'][1]
+        nxJ = self.nodes[junction_node]['position_sym'][0]
+        nyJ = self.nodes[junction_node]['position_sym'][1]
+        nxD = self.nodes[dispersed_node]['position_sym'][0]
+        nyD = self.nodes[dispersed_node]['position_sym'][1]
         # Retrieve symbols for channel lengths
-        lenC = self.channels[continuous_node+junction_node]['len_sym']
-        lenO = self.channels[junction_node+output_node]['len_sym']
-        lenD = self.channels[dispersed_node+junction_node]['len_sym']
+        lenC = self.channels[continuous_node+junction_node]['length']
+        lenO = self.channels[junction_node+output_node]['length']
+        lenD = self.channels[dispersed_node+junction_node]['length']
 
         # Assert positions equal their provided position, controlPointPlacement
         self.exprs.append(Equals(nxC, xC))
@@ -295,7 +320,7 @@ class Schematic():
 
         # Assert critical angle is <= calculated angle
         cosine_squared_theta_crit = Real(math.cos(
-            math.radian(critCrossingAngle))**2)
+            math.radians(critCrossingAngle))**2)
         # Continuous to dispersed
         self.exprs.append(LE(cosine_squared_theta_crit,
                              self.cosine_law_crit_angle([nxC, nyC],
@@ -320,7 +345,7 @@ class Schematic():
         self.exprs.append(self.pythagorean_length([nxD, nyD], [nxJ, nyJ], lenD))
         self.exprs.append(self.pythagorean_length([nxJ, nyJ], [nxO, nyO], lenO))
 
-    def pythagorean_length(node1, node2, ch_len):
+    def pythagorean_length(self, node1, node2, ch_len):
         """Use Pythagorean theorem to assert that the channel length
         (hypoteneuse) squared is equal to the legs squared so channel
         length is solved for
@@ -333,7 +358,7 @@ class Schematic():
         c_squared = Pow(ch_len, Real(2))
         return Equals(a_squared_plus_b_squared, c_squared)
 
-    def cosine_law_crit_angle(node1, node2, node3):
+    def cosine_law_crit_angle(self, node1, node2, node3):
         """Use cosine law to find cos^2(theta) between three points
         node1---node2---node3 to assert that it is less than cos^2(thetaC)
         where thetaC is the critical crossing angle
@@ -370,7 +395,7 @@ class Schematic():
         q_gutter = Real(0.1)
         # normalizedVFill = 3pi/8 - (pi/2)(1 - pi/4)(h/w)
         v_fill_simple = Minus(
-                Times(Real(3, 8), Real(math.pi)),
+                Times(Real((3, 8)), Real(math.pi)),
                 Times(Times(
                             Div(Real(math.pi), Real(2)),
                             Minus(Real(1),
@@ -426,32 +451,12 @@ class Schematic():
         print(self.exprs)
 
     def invoke_backend(self):
-        # model = get_model(self.exprs)
-        for f in self.exprs:
-            with Solver(name="z3", logic=QF_NRA) as s:
-                s.add_assertion(f)
-
-                check = s.solve()
-                self.assertTrue(check)
-
-                # Ask single values to the solver
-                subs = {}
-                for d in f.get_free_variables():
-                    m = s.get_value(d)
-                    subs[d] = m
-
-                simp = f.substitute(subs).simplify()
-                # self.assertEqual(simp, TRUE(), "%s -- %s :> %s" % (f, subs, simp))
-
-                # Ask the eager model
-                subs = {}
-                model = s.get_model()
-                for d in f.get_free_variables():
-                    m = model.get_value(d)
-                    subs[d] = m
-
-                simp = f.substitute(subs).simplify()
-                # self.assertEqual(simp, TRUE())
+        formula = And(self.exprs)
+        # Prints the generated formula in full, remove serialize for shortened
+        pprint(formula.serialize())
+        # Return None if not solvable, returns a dict-like structure giving the
+        # range of values for each Symbol
+        return get_model(formula)
 
     def solve(self):
         """Create the SMT2 equation for this schematic outlining the design

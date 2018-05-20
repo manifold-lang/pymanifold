@@ -7,7 +7,7 @@ sch = pymf.Schematic()
 continuous_node = 'continuous'
 dispersed_node = 'dispersed'
 output_node = 'out'
-junction_node = 't-j'
+junction_node = 't_j'
 # Continuous and output node should have same flow rate
 # syntax: sch.port(name, design, pressure, flow_rate, X_pos, Y_pos)
 sch.port(continuous_node, 'input', 2, 5, 0, 0)
@@ -18,8 +18,8 @@ sch.node(junction_node, 't-junction', 2, 1, 0)
 sch.channel('rectangle', 0.5, 0.1, 0.1, continuous_node,
             junction_node, phase='continuous')
 sch.channel('rectangle', 0.5, 0.1, 0.1, dispersed_node,
-            junction_node, phase='continuous')
+            junction_node, phase='dispersed')
 sch.channel('rectangle', 0.5, 0.1, 0.1, junction_node,
-            output_node, phase='continuous')
+            output_node, phase='output')
 
-sch.solve()
+print(sch.solve())
