@@ -81,6 +81,8 @@ This project is still in development, features that need to be added are:
 * Gather a database of real world microfluidic chip designs and information about their output
 * Implement a machine learning algorithm on this database to improve the library's accuracy in
 determining if different designed will work
+* Put this library on pip to simplify installation, and create a website to outline usage using
+[read the docs](https://readthedocs.org/)
 
 ## Authors
 
