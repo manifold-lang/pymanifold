@@ -43,6 +43,8 @@ The code to create a simple T-Junction droplet generator is as follows found in 
 [test script](src/test.py), but is still in development:
 
 ```
+import pymanifold as pymf
+
 sch = pymf.Schematic()
 #       D
 #       |
@@ -50,25 +52,24 @@ sch = pymf.Schematic()
 continuous_node = 'continuous'
 dispersed_node = 'dispersed'
 output_node = 'out'
-junction_node = 't-j'
+junction_node = 't_j'
 # Continuous and output node should have same flow rate
 # syntax: sch.port(name, design, pressure, flow_rate, X_pos, Y_pos)
 sch.port(continuous_node, 'input', 2, 5, 0, 0)
 sch.port(dispersed_node, 'input', 2, 2, 1, 1)
 sch.port(output_node, 'output', 2, 5, 2, 0)
-sch.node(junction_node, 't-junction', 2, 1, 0)
-# syntax: sch.channel(shape, min length, width, height, input, output)
+sch.node(junction_node, 2, 1, 0, kind='t-junction')
+# syntax: sch.channel(shape, min_length, width, height, input, output)
 sch.channel('rectangle', 0.5, 0.1, 0.1, continuous_node,
             junction_node, phase='continuous')
 sch.channel('rectangle', 0.5, 0.1, 0.1, dispersed_node,
-            junction_node, phase='continuous')
+            junction_node, phase='dispersed')
 sch.channel('rectangle', 0.5, 0.1, 0.1, junction_node,
-            output_node, phase='continuous')
+            output_node, phase='output')
 
-sch.solve()
+print(sch.solve())
 
-
-# Return: Solution found, range of flow rates: in1: [10, 40]ul/min, in2: [1, 3.2]ul/min
+# Return: Model object from pySMT with dictionary like mapping of each Symbol to its value
 ```
 
 ## Development

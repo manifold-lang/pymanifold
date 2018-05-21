@@ -13,7 +13,7 @@ junction_node = 't_j'
 sch.port(continuous_node, 'input', 2, 5, 0, 0)
 sch.port(dispersed_node, 'input', 2, 2, 1, 1)
 sch.port(output_node, 'output', 2, 5, 2, 0)
-sch.node(junction_node, 't-junction', 2, 1, 0)
+sch.node(junction_node, 2, 1, 0, kind='t-junction')
 # syntax: sch.channel(shape, min_length, width, height, input, output)
 sch.channel('rectangle', 0.5, 0.1, 0.1, continuous_node,
             junction_node, phase='continuous')

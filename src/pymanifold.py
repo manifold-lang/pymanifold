@@ -82,7 +82,9 @@ class Schematic():
             self.connections[port_from] = [port_to]
 
         # Add the information about that connection to another dict
-        self.channels[port_from+port_to] = {'length': Symbol(port_from
+        self.channels[port_from+port_to] = {'port_from': port_from,
+                                            'port_to': port_to,
+                                            'length': Symbol(port_from
                                                              + port_to
                                                              + '_length',
                                                              REAL),
@@ -97,6 +99,10 @@ class Schematic():
                                                              + '_height',
                                                              REAL),
                                             'min_height': min_height,
+                                            'flow_rate': Symbol(port_from
+                                                                + port_to
+                                                                + '_flow_rate',
+                                                                REAL),
                                             'droplet_volume': Symbol(port_from
                                                                      + port_to
                                                                      + '_Dvol',
@@ -116,14 +122,14 @@ class Schematic():
     # TODO: Should X and Y be forced to be >0 for triangle area calc?
     # TODO: There are similar arguments for both port and node that could be
     #       simplified if they were inhereted from a common object
-    def port(self, name, design, min_pressure, min_flow_rate, X, Y,
+    def port(self, name, kind, min_pressure, min_flow_rate, X, Y,
              min_viscosity=1):
         """Create new port where fluids can enter or exit the circuit, viscosity
-        and designs needs to be specified
+        and kind('input' or 'output') needs to be specified
         """
         # Checking that arguments are valid
-        if not isinstance(name, str) or not isinstance(design, str):
-            raise TypeError("name and design must be strings")
+        if not isinstance(name, str) or not isinstance(kind, str):
+            raise TypeError("name and kind must be strings")
         if not isinstance(min_pressure, (int, float)):
             raise TypeError("pressure must be a number")
         if not isinstance(min_flow_rate, (int, float)):
@@ -136,28 +142,29 @@ class Schematic():
 
         # Ports are stores with nodes because ports are just a specific type of
         # node that has a constant flow rate
-        if design.lower() in self.translate_ports.keys():
-            self.nodes[name] = {'design': design.lower(),
+        if kind.lower() in self.translate_ports.keys():
+            self.nodes[name] = {'kind': kind.lower(),
                                 'viscosity': Symbol(name+'_viscosity', REAL),
                                 'min_viscosity': min_viscosity,
                                 'pressure': Symbol(name+'_pressure', REAL),
                                 'min_pressure': min_pressure,
-                                'flow_rate': Symbol(name+'_Q', REAL),
+                                'flow_rate': Symbol(name+'_flow_rate', REAL),
                                 'min_flow_rate': min_flow_rate,
                                 'position': [X, Y],
                                 'position_sym': [Symbol(name+'_X', REAL),
                                                  Symbol(name+'_Y', REAL)]
                                 }
         else:
-            raise ValueError("design must be %s" % self.translate_ports.keys())
+            raise ValueError("kind must be %s" % self.translate_ports.keys())
 
-    def node(self, name, design, min_pressure, X, Y):
-        """Create new node where fluids merge or split, design of the node
-        (T-junction, Y-junction, cross, etc.) needs to be specified
+    def node(self, name, min_pressure, X, Y, kind='node'):
+        """Create new node where fluids merge or split, kind of node
+        (T-junction, Y-junction, cross, etc.) can be specified
+        if not then a basical node connecting multiple channels will be created
         """
         # Checking that arguments are valid
-        if not isinstance(name, str) or not isinstance(design, str):
-            raise TypeError("name/design must be strings")
+        if not isinstance(name, str) or not isinstance(kind, str):
+            raise TypeError("name and kind must be strings")
         if not isinstance(min_pressure, (int, float)):
             raise TypeError("pressure must be a number")
         if not isinstance(X, (int, float)) or\
@@ -166,30 +173,67 @@ class Schematic():
         if name in self.nodes.keys():
             raise ValueError("Must provide a unique name")
 
-        if design.lower() in self.translate_nodes.keys():
-            self.nodes[name] = {'design': design.lower(),
+        if kind.lower() in self.translate_nodes.keys():
+            self.nodes[name] = {'kind': kind.lower(),
                                 'pressure': Symbol(name+'_pressure', REAL),
+                                'flow_rate': Symbol(name+'_flow_rate', REAL),
+                                'viscosity': Symbol(name+'_viscosity', REAL),
                                 'min_pressure': min_pressure,
                                 'position': [X, Y],
                                 'position_sym': [Symbol(name+'_X', REAL),
                                                  Symbol(name+'_Y', REAL)]
                                 }
         else:
-            raise ValueError("design name not valid, only %s are valid" %
+            raise ValueError("kind name not valid, only %s are valid" %
                              self.translate_nodes.keys())
 
     def translate_input(self, name):
-        # Validate input
+        """Generate equations to simulate a fluid input port
+        """
         num_connections = len(self.connections[name])
         if num_connections <= 0:
             raise ValueError("Port %s must have 1 or more connections" % name)
+        # Node pressure greater than 0
+        self.exprs.append(GE(self.nodes[name]['pressure'], Real(0)))
 
     def translate_output(self, name):
-        # Validate output
+        """Generate equations to simulate a fluid output port
+        """
         for port_in, ports_out in self.connections.items():
             if name in ports_out:
                 return True
         raise ValueError("Port %s must have 1 or more connections" % name)
+        # Node pressure greater than 0
+        self.exprs.append(GE(self.nodes[name]['pressure'], Real(0)))
+
+    # TODO: assert node position here and for ports
+    def translate_node(self, name):
+        """Generate equations to simulate a basic node connecting two or more channels
+        """
+        outputs = self.connections[name]
+        for output in outputs:
+            channel = self.channels[name+output]
+            # PressureFlow strategies here:
+
+            # Assert channel width, height viscosity and resistance greater
+            # than 0 Also asserts that each channel's height is less than width
+            # to make resistance calculation valid
+            self.exprs.append(self.calculate_channel_resistance(channel))
+            # Assert difference in pressure at the two end nodes for a channel
+            # equals the flow rate in the channel times the channel resistance
+            self.exprs.append(self.simple_pressure_flow(channel))
+            # Channel viscosity in channel equal to viscosity of port_from
+            self.exprs.append(Equals(channel['viscosity'],
+                                     self.nodes[channel['port_from']][
+                                         'viscosity']))
+
+        # Flow rate in and out of the node must be equal
+        flow_in = []
+        for port_from, ports_to in self.connections.items():
+            if name in ports_to:
+                flow_in.append(self.nodes[port_from]['flow_rate'])
+        flow_out = self.nodes[name]['flow_rate']
+        self.exprs.append(Equals(Plus(flow_in), flow_out))
 
     # TODO: Refactor some of these calculations so they can be reused by other
     # tanslation methods
@@ -203,6 +247,9 @@ class Schematic():
         num_connections = len(outputs) + 1  # +1 to include the output node
         if num_connections != 3:
             raise ValueError("T-junction %s must have 3 connections" % name)
+
+        # Since T-junction is just a specialized node, call translate node
+        self.translate_node(name)
 
         junction_node = name
         continuous_node = ''
@@ -247,12 +294,6 @@ class Schematic():
         self.exprs.append(Equals(self.nodes[name]['pressure'],
                                  self.nodes[output_node]['pressure']
                                  ))
-
-        # Flow rate in and out of the intersection must be equal
-        flow_in = self.nodes[continuous_node]['flow_rate']\
-                + self.nodes[dispersed_node]['flow_rate']
-        flow_out = self.nodes[output_node]['flow_rate']
-        self.exprs.append(Equals(flow_in, flow_out))
 
         # Viscosity in continous phase equals viscosity at output
         self.exprs.append(Equals(self.nodes[continuous_node]['viscosity'],
@@ -358,31 +399,42 @@ class Schematic():
         self.exprs.append(self.pythagorean_length([nxD, nyD], [nxJ, nyJ], lenD))
         self.exprs.append(self.pythagorean_length([nxJ, nyJ], [nxO, nyO], lenO))
 
-        # PressureFlow strategies here:
-
-        # Assert channel width, height viscosity and resistance greater than 0
-        self.exprs.append(self.calculate_channel_resistance(continuous_channel))
-        self.exprs.append(self.calculate_channel_resistance(dispersed_channel))
-        self.exprs.append(self.calculate_channel_resistance(output_channel))
+    # TODO: In Manifold this has the option for worst case analysis, need to
+    #       understand when this is needed and implement it if needed
+    def simple_pressure_flow(self, _channel):
+        """Assert difference in pressure at the two end nodes for a channel
+        equals the flow rate in the channel times the channel resistance
+        More complicated calculation available through
+        analytical_pressure_flow method
+        """
+        p1 = self.nodes[_channel['port_from']]['pressure']
+        p2 = self.nodes[_channel['port_to']]['pressure']
+        chV = _channel['flow_rate']
+        chR = _channel['resistance']
+        return Equals(Minus(p1, p2),
+                      Times(chV, chR)
+                      )
 
     def calculate_channel_resistance(self, _channel):
-        """Calculate the droplet resistance is a channel
+        """Calculate the droplet resistance in a channel using:
+        R = (12 * mu * L) / (w * h^3 * (1 - 0.630 (h/w)) )
         """
         chR = _channel['resistance']
         w = _channel['width']
         h = _channel['height']
         mu = _channel['viscosity']
         chL = _channel['length']
-        self.exprs.append(Equals(Div(Times(Real(12),
-                                           Times(mu, chL)
-                                           ),
-                                     Times(w,
-                                           Times(Pow(h, Real(3)),
-                                                 Minus(Real(1),
-                                                       Times(Real(0.63),
-                                                             Div(h, w)
-                                                             )))))))
-        self.exprs.append(LT(h, w))
+        return And(LT(h, w),
+                   Equals(chR,
+                          Div(Times(Real(12),
+                                    Times(mu, chL)
+                                    ),
+                              Times(w,
+                                    Times(Pow(h, Real(3)),
+                                          Minus(Real(1),
+                                                Times(Real(0.63),
+                                                      Div(h, w)
+                                                      )))))))
 
     def pythagorean_length(self, node1, node2, ch_len):
         """Use Pythagorean theorem to assert that the channel length
@@ -486,11 +538,11 @@ class Schematic():
         """
         for name, attributes in self.nodes.items():
             # The translate method names are stored in a dictionary name where
-            # the key is the name of that node or port design type
+            # the key is the name of that node or port kind
             try:
-                self.translate_nodes[self.nodes[name]['design']](name)
+                self.translate_nodes[self.nodes[name]['kind']](name)
             except KeyError:
-                self.translate_ports[self.nodes[name]['design']](name)
+                self.translate_ports[self.nodes[name]['kind']](name)
 
     def invoke_backend(self):
         """Combine all of the SMT expressions into one expression to sent to Z3
