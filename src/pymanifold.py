@@ -1,8 +1,8 @@
 from pprint import pprint
 import math
 from pysmt.shortcuts import Symbol, Plus, Times, Div, Pow, Equals, Real
-from pysmt.shortcuts import Minus, GE, LE, Real, Solver, And, is_sat, get_model
-from pysmt.typing import INT, REAL
+from pysmt.shortcuts import Minus, GE, LE, LT, And, get_model
+from pysmt.typing import REAL
 from pysmt.logics import QF_NRA
 
 
@@ -101,6 +101,14 @@ class Schematic():
                                                                      + port_to
                                                                      + '_Dvol',
                                                                      REAL),
+                                            'viscosity': Symbol(port_from
+                                                                + port_to
+                                                                + '_viscosity',
+                                                                REAL),
+                                            'resistance': Symbol(port_from
+                                                                 + port_to
+                                                                 + '_res',
+                                                                 REAL),
                                             'phase': phase.lower(),
                                             }
         return
@@ -183,6 +191,8 @@ class Schematic():
                 return True
         raise ValueError("Port %s must have 1 or more connections" % name)
 
+    # TODO: Refactor some of these calculations so they can be reused by other
+    # tanslation methods
     def translate_tjunc(self, name, critCrossingAngle=0.5):
         # Validate input
         if len(self.connections[name]) > 1:
@@ -198,6 +208,8 @@ class Schematic():
         continuous_node = ''
         dispersed_node = ''
         output_channel = self.channels[name+output_node]
+        continuous_channel = ''
+        dispersed_channel = ''
         for node_from, node_to_list in self.connections.items():
             if name in node_to_list:
                 if self.channels[node_from+name]['phase'] == 'continuous':
@@ -238,7 +250,7 @@ class Schematic():
 
         # Flow rate in and out of the intersection must be equal
         flow_in = self.nodes[continuous_node]['flow_rate']\
-                  + self.nodes[dispersed_node]['flow_rate']
+                + self.nodes[dispersed_node]['flow_rate']
         flow_out = self.nodes[output_node]['flow_rate']
         self.exprs.append(Equals(flow_in, flow_out))
 
@@ -286,11 +298,12 @@ class Schematic():
         nxD = self.nodes[dispersed_node]['position_sym'][0]
         nyD = self.nodes[dispersed_node]['position_sym'][1]
         # Retrieve symbols for channel lengths
-        lenC = self.channels[continuous_node+junction_node]['length']
-        lenO = self.channels[junction_node+output_node]['length']
-        lenD = self.channels[dispersed_node+junction_node]['length']
+        lenC = continuous_channel['length']
+        lenO = output_channel['length']
+        lenD = dispersed_channel['length']
 
-        # Assert positions equal their provided position, controlPointPlacement
+        # Assert positions equal their provided position, like in
+        # controlPointPlacement from Manifold
         self.exprs.append(Equals(nxC, xC))
         self.exprs.append(Equals(nyC, yC))
         self.exprs.append(Equals(nxO, xO))
@@ -344,6 +357,32 @@ class Schematic():
         self.exprs.append(self.pythagorean_length([nxC, nyC], [nxJ, nyJ], lenC))
         self.exprs.append(self.pythagorean_length([nxD, nyD], [nxJ, nyJ], lenD))
         self.exprs.append(self.pythagorean_length([nxJ, nyJ], [nxO, nyO], lenO))
+
+        # PressureFlow strategies here:
+
+        # Assert channel width, height viscosity and resistance greater than 0
+        self.exprs.append(self.calculate_channel_resistance(continuous_channel))
+        self.exprs.append(self.calculate_channel_resistance(dispersed_channel))
+        self.exprs.append(self.calculate_channel_resistance(output_channel))
+
+    def calculate_channel_resistance(self, _channel):
+        """Calculate the droplet resistance is a channel
+        """
+        chR = _channel['resistance']
+        w = _channel['width']
+        h = _channel['height']
+        mu = _channel['viscosity']
+        chL = _channel['length']
+        self.exprs.append(Equals(Div(Times(Real(12),
+                                           Times(mu, chL)
+                                           ),
+                                     Times(w,
+                                           Times(Pow(h, Real(3)),
+                                                 Minus(Real(1),
+                                                       Times(Real(0.63),
+                                                             Div(h, w)
+                                                             )))))))
+        self.exprs.append(LT(h, w))
 
     def pythagorean_length(self, node1, node2, ch_len):
         """Use Pythagorean theorem to assert that the channel length
@@ -442,27 +481,31 @@ class Schematic():
     def translate_schematic(self):
         """Validates that each node has the correct input and output
         conditions met then translates it into pysmt syntax
+        Generates SMT formulas to simulate specialized nodes like T-junctions
+        and stores them in self.exprs
         """
         for name, attributes in self.nodes.items():
+            # The translate method names are stored in a dictionary name where
+            # the key is the name of that node or port design type
             try:
                 self.translate_nodes[self.nodes[name]['design']](name)
             except KeyError:
                 self.translate_ports[self.nodes[name]['design']](name)
-        print(self.exprs)
 
     def invoke_backend(self):
+        """Combine all of the SMT expressions into one expression to sent to Z3
+        solver to determine solvability
+        """
         formula = And(self.exprs)
         # Prints the generated formula in full, remove serialize for shortened
         pprint(formula.serialize())
         # Return None if not solvable, returns a dict-like structure giving the
         # range of values for each Symbol
-        return get_model(formula)
+        return get_model(formula, solver_name='z3', logic=QF_NRA)
 
     def solve(self):
         """Create the SMT2 equation for this schematic outlining the design
         of a microfluidic circuit and use Z3 to solve it using pysmt
         """
-        # TODO translate schematic method
-        # TODO convert schematic to SMT2 expressions method
         self.translate_schematic()
         return self.invoke_backend()
