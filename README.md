@@ -76,14 +76,31 @@ print(sch.solve())
 
 This project is still in development, features that need to be added are:
 
-* Add an elecrophoretic cross as a new node type with voltages at two ends
-* Feature to output electrical characteristics of chip to maple
+* Add an elecrophoretic cross as a new node type with voltages at two ends and pressure driven flow on
+the other two short ends. Steps:
+  * Create a new translate method named translate_ep_cross
+    * This requires 4 connections, two must have a voltage constraint and the other two have a pressure
+	constraint
+	  * This will require the creation of a new port type that is a voltage input, currently only
+	  fluid injection ports exist with a pressure and flow rate, this will have a voltage and no flow
+	* Needs to append correct SMT expressions based on those in Stephen Chou's report to simulate an
+	electropheretic cross(EP cross) https://drive.google.com/open?id=1UF-Jun4-ppJHyb1wMQFqFzaUNbZSdkzl
+  * Add the name of that translation method to the translate_nodes under the name ep_cross
+* Feature to output electrical characteristics of chip to MapleSim(or something similar)
+  * Possibly use this library from Dassault Systems [FMPy](https://github.com/CATIA-Systems/FMPy)
+  * Or produce Modelica code using [OMPython](https://github.com/OpenModelica/OMPython) 
+  to feed into MapleSim
 * Create a to_json method to convert designed schematic to a json file following Manifold IR grammar
+  * Join channels, nodes and connections dictionaries together in the correct syntax
+  * Use python's default json library and call json.dump(joined_dict, file) with file opened to
+  write to
+* Create a website to outline usage using [read the docs](https://readthedocs.org/)
+  * Fill in the content to match other readthedocs like [pysmt](http://pysmt.readthedocs.io)
+  or [Jupyter](http://jupyter.readthedocs.io)
+* Put this library on pip to simplify installation
 * Gather a database of real world microfluidic chip designs and information about their output
 * Implement a machine learning algorithm on this database to improve the library's accuracy in
-determining if different designed will work
-* Put this library on pip to simplify installation, and create a website to outline usage using
-[read the docs](https://readthedocs.org/)
+determining if different designs will work
 
 ## Authors
 
