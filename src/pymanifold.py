@@ -3,7 +3,7 @@ import math
 import networkx as nx
 import matplotlib.pyplot as plt  # just for testing to show graph, may not keep
 from pysmt.shortcuts import Symbol, Plus, Times, Div, Pow, Equals, Real
-from pysmt.shortcuts import Minus, GE, LE, LT, And, get_model
+from pysmt.shortcuts import Minus, GE, GT, LE, LT, And, get_model
 from pysmt.typing import REAL
 from pysmt.logics import QF_NRA
 
@@ -16,13 +16,14 @@ class Schematic():
     """
     # TODO schematic to JSON method
 
-    def __init__(self):
+    def __init__(self, dim=[0, 0, 10, 10]):
         """Store the connections as a dictionary to form a graph where each
         value is a list of all nodes/ports that a node flows out to, store
         information about each of the channels in a separate dictionary
         dim - dimensions of the chip, [X_min, Y_min, X_max, X_min]
         """
         self.exprs = []
+        self.dim = dim
 
         # Add new node types and their validation method to this dict
         # to maintain consistent checking across all methods
@@ -41,6 +42,7 @@ class Schematic():
                 min_height,
                 port_from,
                 port_to,
+                min_channel_length=0,
                 shape='rectangle',
                 phase='None'):
         """Create new connection between two nodes/ports with attributes
@@ -105,6 +107,7 @@ class Schematic():
                                           + port_to
                                           + '_viscosity',
                                           REAL),
+                      'min_channel_length': min_channel_length,
                       'resistance': Symbol(port_from
                                            + port_to
                                            + '_res',
@@ -112,8 +115,11 @@ class Schematic():
                       'phase': phase.lower(),
                       }
         for key, attr in attributes.items():
-            # skip attribute if it equals 0 since this is default value
-            if not attr == 0:
+            # Store as False instead of 0 to prevent any further
+            # operations from accepting this value by mistake
+            if attr == 0:
+                self.dg.edges[port_from, port_to][key] = False
+            else:
                 self.dg.edges[port_from, port_to][key] = attr
         return
 
@@ -158,8 +164,11 @@ class Schematic():
             # Create this node in the graph
             self.dg.add_node(name)
             for key, attr in attributes.items():
-                # skip attribute if it equals 0 since this is default value
-                if attr != 0:
+                if attr == 0:
+                    # Store as False instead of 0 to prevent any further
+                    # operations from accepting this value by mistake
+                    self.dg.nodes[name][key] = False
+                else:
                     self.dg.nodes[name][key] = attr
         else:
             raise ValueError("kind must be %s" % self.translation_strats.keys())
@@ -189,11 +198,31 @@ class Schematic():
             # Create this node in the graph
             self.dg.add_node(name)
             for key, attr in attributes.items():
-                # skip attribute if it equals 0 since this is default value
-                if not attr == 0:
+                if attr == 0:
+                    # Store as False instead of 0 to prevent any further
+                    # operations from accepting this value by mistake
+                    self.dg.nodes[name][key] = False
+                else:
                     self.dg.nodes[name][key] = attr
         else:
             raise ValueError("kind must be %s" % self.translate_nodes.keys())
+
+    def translate_chip(self, name):
+        """Create SMT2 expressions for bounding the chip area provided when
+        initializing the schematic object
+        """
+        self.exprs.append(GE(self.dg.nodes[name]['position_sym'][0],
+                             Real(self.dim[0])
+                             ))
+        self.exprs.append(GE(self.dg.nodes[name]['position_sym'][1],
+                             Real(self.dim[1])
+                             ))
+        self.exprs.append(LE(self.dg.nodes[name]['position_sym'][0],
+                             Real(self.dim[2])
+                             ))
+        self.exprs.append(LE(self.dg.nodes[name]['position_sym'][1],
+                             Real(self.dim[3])
+                             ))
 
     def translate_input(self, name):
         """Generate equations to simulate a fluid input port
@@ -270,6 +299,21 @@ class Schematic():
             self.exprs.append(GE(named_node['position_sym'][1], Real(0)))
 
     def translate_rec_channel(self, name):
+        named_channel = self.dg.edges[name]
+        pprint(named_channel)
+        if named_channel['min_channel_length']:
+            min_channel_length = Real(named_channel['min_channel_length'])
+        else:
+            # If values isn't provided assert that length must be greater than
+            # than 0
+            min_channel_length = Symbol('_'.join(name + ('min_length',)), REAL)
+            self.exprs.append(GT(min_channel_length, Real(0)))
+
+        self.exprs.append(self.pythagorean_length(
+            self.dg.nodes[name[0]]['position_sym'],
+            self.dg.nodes[name[1]]['position_sym'],
+            min_channel_length
+            ))
         return
 
     # TODO: assert node position here and for ports
@@ -505,6 +549,7 @@ class Schematic():
         """Use Pythagorean theorem to assert that the channel length
         (hypoteneuse) squared is equal to the legs squared so channel
         length is solved for
+        ch_len - Channel length, must be a pysmt Real
         """
         side_a = Minus(node1[0], node2[0])
         side_b = Minus(node1[1], node2[1])
@@ -603,10 +648,13 @@ class Schematic():
         """
         # The translate method names are stored in a dictionary name where
         # the key is the name of that node or port kind, also run on channels
+        # and finish by constaining nodes to be within chip area
         for name in self.dg.nodes:
             self.translation_strats[self.dg.nodes[name]['kind']](name)
         for name in self.dg.edges:
             self.translation_strats[self.dg.edges[name]['shape']](name)
+        for name in self.dg.nodes:
+            self.translate_chip(name)
 
     # TODO: add way of handling if there isn't enough information to solve but
     # still returns solvable because the ranges can be anything
