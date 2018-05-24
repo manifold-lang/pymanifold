@@ -1,5 +1,7 @@
 from pprint import pprint
 import math
+import networkx as nx
+import matplotlib.pyplot as plt  # just for testing to show graph, may not keep
 from pysmt.shortcuts import Symbol, Plus, Times, Div, Pow, Equals, Real
 from pysmt.shortcuts import Minus, GE, LE, LT, And, get_model
 from pysmt.typing import REAL
@@ -18,26 +20,28 @@ class Schematic():
         """Store the connections as a dictionary to form a graph where each
         value is a list of all nodes/ports that a node flows out to, store
         information about each of the channels in a separate dictionary
+        dim - dimensions of the chip, [X_min, Y_min, X_max, X_min]
         """
-        self.connections = {}
-        self.channels = {}
-        self.nodes = {}
         self.exprs = []
 
         # Add new node types and their validation method to this dict
         # to maintain consistent checking across all methods
         self.translation_strats = {'input': self.translate_input,
                                    'output': self.translate_output,
-                                   't-junction': self.translate_tjunc
+                                   't-junction': self.translate_tjunc,
+                                   'rectangle': self.translate_rec_channel
                                    }
 
+        # DiGraph that will contain all nodes and channels
+        self.dg = nx.DiGraph()
+
     def channel(self,
-                shape,
                 min_length,
                 min_width,
                 min_height,
                 port_from,
                 port_to,
+                shape='rectangle',
                 phase='None'):
         """Create new connection between two nodes/ports with attributes
         consisting of the dimensions of the channel to be used to create the
@@ -54,10 +58,6 @@ class Schematic():
         """
         valid_shapes = ("rectangle")
         # Checking that arguments are valid
-        if not isinstance(shape, str) or not isinstance(port_from, str)\
-                or not isinstance(port_to, str):
-            raise TypeError("shape of channel, input and output ports must be\
-                    strings")
         if not isinstance(min_length, (int, float))\
                 or not isinstance(min_width, (int, float))\
                 or not isinstance(min_height, (int, float)):
@@ -65,59 +65,60 @@ class Schematic():
         if shape not in valid_shapes:
             raise ValueError("Valid channel shapes are: %s"
                              % valid_shapes)
-        if port_from not in self.nodes.keys():
+        if port_from not in self.dg.nodes:
             raise ValueError("port_from node doesn't exist")
-        elif port_to not in self.nodes.keys():
+        elif port_to not in self.dg.nodes():
             raise ValueError("port_to node doesn't exist")
 
-        # If that fluid entry node already exists then that means there is
-        # another node that it flows out to so append that exit node to list
-        try:
-            # Can't have two of the same channel
-            if port_to in self.connections[port_from]:
-                raise ValueError("Channel already exists between these nodes")
-            self.connections[port_from].append(port_to)
-        except KeyError:
-            self.connections[port_from] = [port_to]
+        # Can't have two of the same channel
+        if (port_from, port_to) in self.dg.nodes:
+            raise ValueError("Channel already exists between these nodes")
+        # Create this edge in the graph
+        self.dg.add_edge(port_from, port_to)
 
         # Add the information about that connection to another dict
-        self.channels[port_from+port_to] = {'port_from': port_from,
-                                            'port_to': port_to,
-                                            'length': Symbol(port_from
-                                                             + port_to
-                                                             + '_length',
-                                                             REAL),
-                                            'min_length': min_length,
-                                            'width': Symbol(port_from
-                                                            + port_to
-                                                            + '_width',
-                                                            REAL),
-                                            'min_width': min_width,
-                                            'height': Symbol(port_from
-                                                             + port_to
-                                                             + '_height',
-                                                             REAL),
-                                            'min_height': min_height,
-                                            'flow_rate': Symbol(port_from
-                                                                + port_to
-                                                                + '_flow_rate',
-                                                                REAL),
-                                            'droplet_volume': Symbol(port_from
-                                                                     + port_to
-                                                                     + '_Dvol',
-                                                                     REAL),
-                                            'viscosity': Symbol(port_from
-                                                                + port_to
-                                                                + '_viscosity',
-                                                                REAL),
-                                            'resistance': Symbol(port_from
-                                                                 + port_to
-                                                                 + '_res',
-                                                                 REAL),
-                                            'phase': phase.lower(),
-                                            }
+        attributes = {'shape': shape,
+                      'length': Symbol(port_from
+                                       + port_to
+                                       + '_length',
+                                       REAL),
+                      'min_length': min_length,
+                      'width': Symbol(port_from
+                                      + port_to
+                                      + '_width',
+                                      REAL),
+                      'min_width': min_width,
+                      'height': Symbol(port_from
+                                       + port_to
+                                       + '_height',
+                                       REAL),
+                      'min_height': min_height,
+                      'flow_rate': Symbol(port_from
+                                          + port_to
+                                          + '_flow_rate',
+                                          REAL),
+                      'droplet_volume': Symbol(port_from
+                                               + port_to
+                                               + '_Dvol',
+                                               REAL),
+                      'viscosity': Symbol(port_from
+                                          + port_to
+                                          + '_viscosity',
+                                          REAL),
+                      'resistance': Symbol(port_from
+                                           + port_to
+                                           + '_res',
+                                           REAL),
+                      'phase': phase.lower(),
+                      }
+        for key, attr in attributes.items():
+            # skip attribute if it equals 0 since this is default value
+            if not attr == 0:
+                self.dg.edges[port_from, port_to][key] = attr
         return
 
+    # TODO: Add ability to specify a fluid type in the node (ie. water) and
+    #       have this method automatically fill in the parameters for water
     # TODO: Should X and Y be forced to be >0 for triangle area calc?
     # TODO: There are similar arguments for both port and node that could be
     #       simplified if they were inhereted from a common object
@@ -129,7 +130,7 @@ class Schematic():
         # Checking that arguments are valid
         if not isinstance(name, str) or not isinstance(kind, str):
             raise TypeError("name and kind must be strings")
-        if name in self.nodes.keys():
+        if name in self.dg.nodes:
             raise ValueError("Must provide a unique name")
         if not isinstance(min_pressure, (int, float)):
             raise TypeError("pressure must be a number")
@@ -139,22 +140,29 @@ class Schematic():
                 not isinstance(Y, (int, float)):
             raise TypeError("X and Y pos must be numbers")
 
-        # Ports are stores with nodes because ports are just a specific type of
+        # Ports are stored with nodes because ports are just a specific type of
         # node that has a constant flow rate
-        if kind.lower() in self.translate_ports.keys():
-            self.nodes[name] = {'kind': kind.lower(),
-                                'viscosity': Symbol(name+'_viscosity', REAL),
-                                'min_viscosity': min_viscosity,
-                                'pressure': Symbol(name+'_pressure', REAL),
-                                'min_pressure': min_pressure,
-                                'flow_rate': Symbol(name+'_flow_rate', REAL),
-                                'min_flow_rate': min_flow_rate,
-                                'position': [X, Y],
-                                'position_sym': [Symbol(name+'_X', REAL),
-                                                 Symbol(name+'_Y', REAL)]
-                                }
+        # only accept ports of the right kind (input or output)
+        if kind.lower() in self.translation_strats.keys():
+            attributes = {'kind': kind.lower(),
+                          'viscosity': Symbol(name+'_viscosity', REAL),
+                          'min_viscosity': min_viscosity,
+                          'pressure': Symbol(name+'_pressure', REAL),
+                          'min_pressure': min_pressure,
+                          'flow_rate': Symbol(name+'_flow_rate', REAL),
+                          'min_flow_rate': min_flow_rate,
+                          'position': [X, Y],
+                          'position_sym': [Symbol(name+'_X', REAL),
+                                           Symbol(name+'_Y', REAL)]
+                          }
+            # Create this node in the graph
+            self.dg.add_node(name)
+            for key, attr in attributes.items():
+                # skip attribute if it equals 0 since this is default value
+                if attr != 0:
+                    self.dg.nodes[name][key] = attr
         else:
-            raise ValueError("kind must be %s" % self.translate_ports.keys())
+            raise ValueError("kind must be %s" % self.translation_strats.keys())
 
     def node(self, name, X=0, Y=0, kind='node'):
         """Create new node where fluids merge or split, kind of node
@@ -164,100 +172,112 @@ class Schematic():
         # Checking that arguments are valid
         if not isinstance(name, str) or not isinstance(kind, str):
             raise TypeError("name and kind must be strings")
-        if name in self.nodes.keys():
+        if name in self.dg.nodes:
             raise ValueError("Must provide a unique name")
         if not isinstance(X, (int, float)) or not isinstance(Y, (int, float)):
             raise TypeError("X and Y pos must be numbers")
 
         if kind.lower() in self.translate_nodes.keys():
-            self.nodes[name] = {'kind': kind.lower(),
-                                'pressure': Symbol(name+'_pressure', REAL),
-                                'flow_rate': Symbol(name+'_flow_rate', REAL),
-                                'viscosity': Symbol(name+'_viscosity', REAL),
-                                'position': [X, Y],
-                                'position_sym': [Symbol(name+'_X', REAL),
-                                                 Symbol(name+'_Y', REAL)]
-                                }
+            attributes = {'kind': kind.lower(),
+                          'pressure': Symbol(name+'_pressure', REAL),
+                          'flow_rate': Symbol(name+'_flow_rate', REAL),
+                          'viscosity': Symbol(name+'_viscosity', REAL),
+                          'position': [X, Y],
+                          'position_sym': [Symbol(name+'_X', REAL),
+                                           Symbol(name+'_Y', REAL)]
+                          }
+            # Create this node in the graph
+            self.dg.add_node(name)
+            for key, attr in attributes.items():
+                # skip attribute if it equals 0 since this is default value
+                if not attr == 0:
+                    self.dg.nodes[name][key] = attr
         else:
-            raise ValueError("kind name not valid, only %s are valid" %
-                             self.translate_nodes.keys())
+            raise ValueError("kind must be %s" % self.translate_nodes.keys())
 
     def translate_input(self, name):
         """Generate equations to simulate a fluid input port
         """
-        num_connections = len(self.connections[name])
-        if num_connections <= 0:
+        if len(list(self.dg.neighbors(name))) <= 0:
             raise ValueError("Port %s must have 1 or more connections" % name)
-        named_node = self.nodes[name]
+        named_node = self.dg.nodes[name]
         # If parameters are provided by the user, then set the
         # their Symbol equal to that value, otherwise make it greater than 0
         if named_node['min_pressure']:
+            # named_node['pressure'] returns variable for node for pressure
+            # where 'min_pressure' returns the user defined value if provided,
+            # else its 0, same is true for viscosity and position (position_sym
+            # provides the symbol in this case)
             self.exprs.append(Equals(named_node['pressure'],
-                                     named_node['min_pressure']
-                                     )
+                                     Real(named_node['min_pressure'])
+                                     ))
         else:
-            self.exprs.append(GE(self.nodes[name]['pressure'], Real(0)))
+            self.exprs.append(GE(named_node['pressure'], Real(0)))
         if named_node['min_flow_rate']:
             self.exprs.append(Equals(named_node['flow_rate'],
-                                     named_node['min_flow_rate']
-                                     )
+                                     Real(named_node['min_flow_rate'])
+                                     ))
         else:
-            self.exprs.append(GE(self.nodes[name]['flow_rate'], Real(0)))
+            self.exprs.append(GE(named_node['flow_rate'], Real(0)))
         if named_node['position'][0]:
             self.exprs.append(Equals(named_node['position_sym'][0],
-                                     named_node['position'][0]
-                                     )
+                                     Real(named_node['position'][0])
+                                     ))
             # If there is an X position, there must be Y and vice versa
             self.exprs.append(Equals(named_node['position_sym'][1],
-                                     named_node['position'][1]
-                                     )
+                                     Real(named_node['position'][1])
+                                     ))
         else:
-            self.exprs.append(GE(self.nodes[name]['position'][0], Real(0)))
-            self.exprs.append(GE(self.nodes[name]['position'][1], Real(0)))
+            self.exprs.append(GE(named_node['position_sym'][0], Real(0)))
+            self.exprs.append(GE(named_node['position_sym'][1], Real(0)))
 
+    # TODO: Find out how output and input need to be different, currently they
+    #       are exactly the same
     def translate_output(self, name):
         """Generate equations to simulate a fluid output port
         """
-        for port_in, ports_out in self.connections.items():
-            if name in ports_out:
-                return True
-        raise ValueError("Port %s must have 1 or more connections" % name)
-        named_node = self.nodes[name]
+        if self.dg.size(name) <= 0:
+            raise ValueError("Port %s must have 1 or more connections" % name)
+        named_node = self.dg.nodes[name]
         # If parameters are provided by the user, then set the
         # their Symbol equal to that value, otherwise make it greater than 0
         if named_node['min_pressure']:
+            # named_node['pressure'] returns variable for node for pressure
+            # where 'min_pressure' returns the user defined value if provided,
+            # else its 0, same is true for viscosity and position (position_sym
+            # provides the symbol in this case)
             self.exprs.append(Equals(named_node['pressure'],
-                                     named_node['min_pressure']
-                                     )
+                                     Real(named_node['min_pressure'])
+                                     ))
         else:
-            self.exprs.append(GE(self.nodes[name]['pressure'], Real(0)))
+            self.exprs.append(GE(named_node['pressure'], Real(0)))
         if named_node['min_flow_rate']:
             self.exprs.append(Equals(named_node['flow_rate'],
-                                     named_node['min_flow_rate']
-                                     )
+                                     Real(named_node['min_flow_rate'])
+                                     ))
         else:
-            self.exprs.append(GE(self.nodes[name]['flow_rate'], Real(0)))
+            self.exprs.append(GE(named_node['flow_rate'], Real(0)))
         if named_node['position'][0]:
             self.exprs.append(Equals(named_node['position_sym'][0],
-                                     named_node['position'][0]
-                                     )
+                                     Real(named_node['position'][0])
+                                     ))
             # If there is an X position, there must be Y and vice versa
             self.exprs.append(Equals(named_node['position_sym'][1],
-                                     named_node['position'][1]
-                                     )
+                                     Real(named_node['position'][1])
+                                     ))
         else:
-            self.exprs.append(GE(self.nodes[name]['position'][0], Real(0)))
-            self.exprs.append(GE(self.nodes[name]['position'][1], Real(0)))
+            self.exprs.append(GE(named_node['position_sym'][0], Real(0)))
+            self.exprs.append(GE(named_node['position_sym'][1], Real(0)))
 
-    def translate_channel(self, name):
+    def translate_rec_channel(self, name):
+        return
 
     # TODO: assert node position here and for ports
     def translate_node(self, name):
         """Generate equations to simulate a basic node connecting two or more channels
         """
-        outputs = self.connections[name]
-        for output in outputs:
-            channel = self.channels[name+output]
+        for output in self.df.successors[name]:
+            channel = self.dg.edges[name, output]
             # PressureFlow strategies here:
 
             # Assert channel width, height viscosity and resistance greater
@@ -267,21 +287,21 @@ class Schematic():
             # Assert difference in pressure at the two end nodes for a channel
             # equals the flow rate in the channel times the channel resistance
             self.exprs.append(self.simple_pressure_flow(channel))
-            # Channel viscosity in channel equal to viscosity of port_from
+            # Channel viscosity in each outflowing channel equal to viscosity
+            # of this node
             self.exprs.append(Equals(channel['viscosity'],
-                                     self.nodes[channel['port_from']][
-                                         'viscosity']))
+                                     self.dg[name]['viscosity']))
 
         # Flow rate in and out of the node must be equal
+        # Assume flow rate is the same at the start and end of a channel
         flow_in = []
-        for port_from, ports_to in self.connections.items():
-            if name in ports_to:
-                flow_in.append(self.nodes[port_from]['flow_rate'])
-        flow_out = self.nodes[name]['flow_rate']
+        for port_from in self.dg.predecessors(name):
+            flow_in.append(self.dg.nodes[port_from]['flow_rate'])
+        flow_out = self.df.nodes[name]['flow_rate']
         self.exprs.append(Equals(Plus(flow_in), flow_out))
 
     # TODO: Refactor some of these calculations so they can be reused by other
-    # tanslation methods
+    #       translation methods
     def translate_tjunc(self, name, critCrossingAngle=0.5):
         # Validate input
         if len(self.connections[name]) > 1:
@@ -581,15 +601,15 @@ class Schematic():
         Generates SMT formulas to simulate specialized nodes like T-junctions
         and stores them in self.exprs
         """
-        for name, attributes in self.nodes.items():
-            # The translate method names are stored in a dictionary name where
-            # the key is the name of that node or port kind
-            try:
-                self.translation_strats[self.nodes[name]['kind']](name)
+        # The translate method names are stored in a dictionary name where
+        # the key is the name of that node or port kind, also run on channels
+        for name in self.dg.nodes:
+            self.translation_strats[self.dg.nodes[name]['kind']](name)
+        for name in self.dg.edges:
+            self.translation_strats[self.dg.edges[name]['shape']](name)
 
-        for name, attributes in self.channels.items():
-            translate_channel(name)
-
+    # TODO: add way of handling if there isn't enough information to solve but
+    # still returns solvable because the ranges can be anything
     def invoke_backend(self, _show):
         """Combine all of the SMT expressions into one expression to sent to Z3
         solver to determine solvability
@@ -598,6 +618,8 @@ class Schematic():
         # Prints the generated formula in full, remove serialize for shortened
         if _show:
             pprint(formula.serialize())
+            #  nx.draw(self.dg)
+            #  plt.show()
         # Return None if not solvable, returns a dict-like structure giving the
         # range of values for each Symbol
         return get_model(formula, solver_name='z3', logic=QF_NRA)
