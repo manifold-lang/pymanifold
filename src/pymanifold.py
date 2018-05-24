@@ -26,11 +26,10 @@ class Schematic():
 
         # Add new node types and their validation method to this dict
         # to maintain consistent checking across all methods
-        self.translate_ports = {'input': self.translate_input,
-                                'output': self.translate_output
-                                }
-        self.translate_nodes = {'t-junction': self.translate_tjunc
-                                }
+        self.translation_strats = {'input': self.translate_input,
+                                   'output': self.translate_output,
+                                   't-junction': self.translate_tjunc
+                                   }
 
     def channel(self,
                 shape,
@@ -122,14 +121,16 @@ class Schematic():
     # TODO: Should X and Y be forced to be >0 for triangle area calc?
     # TODO: There are similar arguments for both port and node that could be
     #       simplified if they were inhereted from a common object
-    def port(self, name, kind, min_pressure, min_flow_rate, X, Y,
-             min_viscosity=1):
-        """Create new port where fluids can enter or exit the circuit, viscosity
+    def port(self, name, kind, min_pressure=0, min_flow_rate=0, X=0, Y=0,
+             min_viscosity=0):
+        """Create new port where fluids can enter or exit the circuit, name
         and kind('input' or 'output') needs to be specified
         """
         # Checking that arguments are valid
         if not isinstance(name, str) or not isinstance(kind, str):
             raise TypeError("name and kind must be strings")
+        if name in self.nodes.keys():
+            raise ValueError("Must provide a unique name")
         if not isinstance(min_pressure, (int, float)):
             raise TypeError("pressure must be a number")
         if not isinstance(min_flow_rate, (int, float)):
@@ -137,8 +138,6 @@ class Schematic():
         if not isinstance(X, (int, float)) or\
                 not isinstance(Y, (int, float)):
             raise TypeError("X and Y pos must be numbers")
-        if name in self.nodes.keys():
-            raise ValueError("Must provide a unique name")
 
         # Ports are stores with nodes because ports are just a specific type of
         # node that has a constant flow rate
@@ -157,7 +156,7 @@ class Schematic():
         else:
             raise ValueError("kind must be %s" % self.translate_ports.keys())
 
-    def node(self, name, min_pressure, X, Y, kind='node'):
+    def node(self, name, X=0, Y=0, kind='node'):
         """Create new node where fluids merge or split, kind of node
         (T-junction, Y-junction, cross, etc.) can be specified
         if not then a basical node connecting multiple channels will be created
@@ -165,20 +164,16 @@ class Schematic():
         # Checking that arguments are valid
         if not isinstance(name, str) or not isinstance(kind, str):
             raise TypeError("name and kind must be strings")
-        if not isinstance(min_pressure, (int, float)):
-            raise TypeError("pressure must be a number")
-        if not isinstance(X, (int, float)) or\
-                not isinstance(Y, (int, float)):
-            raise TypeError("X and Y pos must be numbers")
         if name in self.nodes.keys():
             raise ValueError("Must provide a unique name")
+        if not isinstance(X, (int, float)) or not isinstance(Y, (int, float)):
+            raise TypeError("X and Y pos must be numbers")
 
         if kind.lower() in self.translate_nodes.keys():
             self.nodes[name] = {'kind': kind.lower(),
                                 'pressure': Symbol(name+'_pressure', REAL),
                                 'flow_rate': Symbol(name+'_flow_rate', REAL),
                                 'viscosity': Symbol(name+'_viscosity', REAL),
-                                'min_pressure': min_pressure,
                                 'position': [X, Y],
                                 'position_sym': [Symbol(name+'_X', REAL),
                                                  Symbol(name+'_Y', REAL)]
@@ -193,8 +188,32 @@ class Schematic():
         num_connections = len(self.connections[name])
         if num_connections <= 0:
             raise ValueError("Port %s must have 1 or more connections" % name)
-        # Node pressure greater than 0
-        self.exprs.append(GE(self.nodes[name]['pressure'], Real(0)))
+        named_node = self.nodes[name]
+        # If parameters are provided by the user, then set the
+        # their Symbol equal to that value, otherwise make it greater than 0
+        if named_node['min_pressure']:
+            self.exprs.append(Equals(named_node['pressure'],
+                                     named_node['min_pressure']
+                                     )
+        else:
+            self.exprs.append(GE(self.nodes[name]['pressure'], Real(0)))
+        if named_node['min_flow_rate']:
+            self.exprs.append(Equals(named_node['flow_rate'],
+                                     named_node['min_flow_rate']
+                                     )
+        else:
+            self.exprs.append(GE(self.nodes[name]['flow_rate'], Real(0)))
+        if named_node['position'][0]:
+            self.exprs.append(Equals(named_node['position_sym'][0],
+                                     named_node['position'][0]
+                                     )
+            # If there is an X position, there must be Y and vice versa
+            self.exprs.append(Equals(named_node['position_sym'][1],
+                                     named_node['position'][1]
+                                     )
+        else:
+            self.exprs.append(GE(self.nodes[name]['position'][0], Real(0)))
+            self.exprs.append(GE(self.nodes[name]['position'][1], Real(0)))
 
     def translate_output(self, name):
         """Generate equations to simulate a fluid output port
@@ -203,8 +222,34 @@ class Schematic():
             if name in ports_out:
                 return True
         raise ValueError("Port %s must have 1 or more connections" % name)
-        # Node pressure greater than 0
-        self.exprs.append(GE(self.nodes[name]['pressure'], Real(0)))
+        named_node = self.nodes[name]
+        # If parameters are provided by the user, then set the
+        # their Symbol equal to that value, otherwise make it greater than 0
+        if named_node['min_pressure']:
+            self.exprs.append(Equals(named_node['pressure'],
+                                     named_node['min_pressure']
+                                     )
+        else:
+            self.exprs.append(GE(self.nodes[name]['pressure'], Real(0)))
+        if named_node['min_flow_rate']:
+            self.exprs.append(Equals(named_node['flow_rate'],
+                                     named_node['min_flow_rate']
+                                     )
+        else:
+            self.exprs.append(GE(self.nodes[name]['flow_rate'], Real(0)))
+        if named_node['position'][0]:
+            self.exprs.append(Equals(named_node['position_sym'][0],
+                                     named_node['position'][0]
+                                     )
+            # If there is an X position, there must be Y and vice versa
+            self.exprs.append(Equals(named_node['position_sym'][1],
+                                     named_node['position'][1]
+                                     )
+        else:
+            self.exprs.append(GE(self.nodes[name]['position'][0], Real(0)))
+            self.exprs.append(GE(self.nodes[name]['position'][1], Real(0)))
+
+    def translate_channel(self, name):
 
     # TODO: assert node position here and for ports
     def translate_node(self, name):
@@ -540,24 +585,26 @@ class Schematic():
             # The translate method names are stored in a dictionary name where
             # the key is the name of that node or port kind
             try:
-                self.translate_nodes[self.nodes[name]['kind']](name)
-            except KeyError:
-                self.translate_ports[self.nodes[name]['kind']](name)
+                self.translation_strats[self.nodes[name]['kind']](name)
 
-    def invoke_backend(self):
+        for name, attributes in self.channels.items():
+            translate_channel(name)
+
+    def invoke_backend(self, _show):
         """Combine all of the SMT expressions into one expression to sent to Z3
         solver to determine solvability
         """
         formula = And(self.exprs)
         # Prints the generated formula in full, remove serialize for shortened
-        pprint(formula.serialize())
+        if _show:
+            pprint(formula.serialize())
         # Return None if not solvable, returns a dict-like structure giving the
         # range of values for each Symbol
         return get_model(formula, solver_name='z3', logic=QF_NRA)
 
-    def solve(self):
+    def solve(self, show=False):
         """Create the SMT2 equation for this schematic outlining the design
         of a microfluidic circuit and use Z3 to solve it using pysmt
         """
         self.translate_schematic()
-        return self.invoke_backend()
+        return self.invoke_backend(show)
