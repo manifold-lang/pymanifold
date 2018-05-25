@@ -76,6 +76,10 @@ print(sch.solve())
 
 This project is still in development, features that need to be added are:
 
+* Add ability to specify liquid flowing into port by name and have the function fill in the
+  parameters (density and viscosity) with values for that liquid to be more user friendly
+* Create get and set methods for the node and channel parameters to standardize manipulating them
+  * Also consider for get methods what to return when the value is defined by the user and when its not
 * Add an elecrophoretic cross as a new node type with voltages at two ends and pressure driven flow on
 the other two short ends. Steps:
   * Create a new translate method named translate_ep_cross
