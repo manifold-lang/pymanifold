@@ -14,7 +14,7 @@ class Schematic():
     determine solvability of the circuit and the range of the parameters where
     it is still solvable
     """
-    # TODO schematic to JSON method
+    # TODO schematic to JSON method following Manifold IR syntax
 
     def __init__(self, dim=[0, 0, 10, 10]):
         """Store the connections as a dictionary to form a graph where each
@@ -36,6 +36,8 @@ class Schematic():
         # DiGraph that will contain all nodes and channels
         self.dg = nx.DiGraph()
 
+    # TODO: All parameters for channel and ports need to have units documented
+    #       depending on the formula
     def channel(self,
                 min_length,
                 min_width,
@@ -49,12 +51,12 @@ class Schematic():
         consisting of the dimensions of the channel to be used to create the
         SMT2 equation to calculate solvability of the circuit
 
-        shape - shape of cross section of the channel
         min_length - constaint the chanell to be at least this long
         width - width of the cross section of the channel
         height - height of the cross section of the channel
         port_from - port where fluid comes into the channel from
         port_to - port at the end of the channel where fluid exits
+        shape - shape of cross section of the channel
         phase - for channels connecting to a T-junction this must be either
                 continuous, dispersed or output
         """
@@ -129,9 +131,10 @@ class Schematic():
     # TODO: There are similar arguments for both port and node that could be
     #       simplified if they were inhereted from a common object
     def port(self, name, kind, min_pressure=0, min_flow_rate=0, X=0, Y=0,
-             min_viscosity=0):
+             density=1, min_viscosity=0):
         """Create new port where fluids can enter or exit the circuit, name
         and kind('input' or 'output') needs to be specified
+        Density - density of fluid being injected in g/cm^3, default is 1(water)
         """
         # Checking that arguments are valid
         if not isinstance(name, str) or not isinstance(kind, str):
@@ -157,6 +160,7 @@ class Schematic():
                           'min_pressure': min_pressure,
                           'flow_rate': Symbol(name+'_flow_rate', REAL),
                           'min_flow_rate': min_flow_rate,
+                          'density': density,  # Density will always be defined
                           'position': [X, Y],
                           'position_sym': [Symbol(name+'_X', REAL),
                                            Symbol(name+'_Y', REAL)]
@@ -299,8 +303,15 @@ class Schematic():
             self.exprs.append(GE(named_node['position_sym'][1], Real(0)))
 
     def translate_rec_channel(self, name):
-        named_channel = self.dg.edges[name]
-        pprint(named_channel)
+        try:
+            named_channel = self.dg.edges[name]
+        except KeyError:
+            raise KeyError('Channel %s does not exist' % name)
+        port_in_name = name[0]
+        port_out_name = name[1]
+        # Use pythagorean theorem to assert that the channel be greater than
+        # the min_channel_length if no value is provided, or set the length
+        # equal to the user provided number
         if named_channel['min_channel_length']:
             min_channel_length = Real(named_channel['min_channel_length'])
         else:
@@ -314,27 +325,51 @@ class Schematic():
             self.dg.nodes[name[1]]['position_sym'],
             min_channel_length
             ))
+
+        # Assert channel width, height viscosity and resistance greater
+        # than 0
+        self.exprs.append(GE(named_channel['width'], Real(0)))
+        self.exprs.append(GE(named_channel['height'], Real(0)))
+
+        # Assert pressure at end of channel is lower based on the resistance of
+        # the channel as calculated by calculate_channel_resistance and
+        # delta(P) = flow_rate * resistance
+        # pressure_out = pressure_in - delta(P)
+        resistance_list = self.calculate_channel_resistance(named_channel)
+        # First term is assertion that each channel's height is less than width
+        # which is needed to make resistance formula valid, second is the SMT
+        # equation of the resistance
+        self.exprs.append(resistance_list[0])
+        resistance = resistance_list[1]
+        flow_rate = self.calculate_port_flow_rate(port_in_name)
+        output_pressure = self.channel_output_pressure(
+                              self.dg.nodes[port_in_name]['pressure'],
+                              resistance,
+                              flow_rate)
+        self.exprs.append(Equals(named_channel['resistance'], resistance))
+        named_channel['resistance'] = resistance
+        self.exprs.append(Equals(named_channel['flow_rate'], flow_rate))
+        named_channel['flow_rate'] = flow_rate
+        self.exprs.append(Equals(self.dg.nodes[port_out_name]['pressure'],
+                                 output_pressure))
+        self.dg.nodes[port_out_name]['pressure'] = output_pressure
         return
 
     # TODO: assert node position here and for ports
     def translate_node(self, name):
         """Generate equations to simulate a basic node connecting two or more channels
         """
+        # TODO: Move these calculations to translate_channel
         for output in self.df.successors[name]:
             channel = self.dg.edges[name, output]
             # PressureFlow strategies here:
 
-            # Assert channel width, height viscosity and resistance greater
-            # than 0 Also asserts that each channel's height is less than width
-            # to make resistance calculation valid
-            self.exprs.append(self.calculate_channel_resistance(channel))
+            self.exprs.extend(self.calculate_channel_resistance(channel))
             # Assert difference in pressure at the two end nodes for a channel
             # equals the flow rate in the channel times the channel resistance
             self.exprs.append(self.simple_pressure_flow(channel))
             # Channel viscosity in each outflowing channel equal to viscosity
             # of this node
-            self.exprs.append(Equals(channel['viscosity'],
-                                     self.dg[name]['viscosity']))
 
         # Flow rate in and out of the node must be equal
         # Assume flow rate is the same at the start and end of a channel
@@ -344,6 +379,7 @@ class Schematic():
         flow_out = self.df.nodes[name]['flow_rate']
         self.exprs.append(Equals(Plus(flow_in), flow_out))
 
+    # TODO: Migrate this to work with NetworkX
     # TODO: Refactor some of these calculations so they can be reused by other
     #       translation methods
     def translate_tjunc(self, name, critCrossingAngle=0.5):
@@ -524,26 +560,35 @@ class Schematic():
                       Times(chV, chR)
                       )
 
+    def channel_output_pressure(self, P_in, chR, chV):
+        """Calculate the pressure at the output of a channel
+        P_in - pressure at beginning of channel
+        chR - channel resistance
+        chV - channel flow rate
+        """
+        return Minus(P_in,
+                     Times(chR, chV))
+
     def calculate_channel_resistance(self, _channel):
         """Calculate the droplet resistance in a channel using:
         R = (12 * mu * L) / (w * h^3 * (1 - 0.630 (h/w)) )
+        This formula assumes that channel height < width, so
+        the first term returned is the assertion for that
         """
-        chR = _channel['resistance']
         w = _channel['width']
         h = _channel['height']
         mu = _channel['viscosity']
         chL = _channel['length']
-        return And(LT(h, w),
-                   Equals(chR,
-                          Div(Times(Real(12),
-                                    Times(mu, chL)
-                                    ),
-                              Times(w,
-                                    Times(Pow(h, Real(3)),
-                                          Minus(Real(1),
-                                                Times(Real(0.63),
-                                                      Div(h, w)
-                                                      )))))))
+        return (LT(h, w),
+                Div(Times(Real(12),
+                          Times(mu, chL)
+                          ),
+                    Times(w,
+                          Times(Pow(h, Real(3)),
+                                Minus(Real(1),
+                                      Times(Real(0.63),
+                                            Div(h, w)
+                                            ))))))
 
     def pythagorean_length(self, node1, node2, ch_len):
         """Use Pythagorean theorem to assert that the channel length
@@ -640,6 +685,28 @@ class Schematic():
         return Times(Times(h, Times(w, w)),
                      Plus(v_fill_simple, Times(alpha, Div(qD, qC))))
 
+    def calculate_port_flow_rate(self, port_in):
+        """Calculate the flow rate into a port based on the cross sectional
+        area of the channel it flows into, the pressure and the density
+        eqn from https://en.wikipedia.org/wiki/Hagen-Poiseuille_equation
+        flow_rate = area * sqrt(2*pressure/density)
+        """
+        areas = []
+        port_in_named = self.dg.nodes[port_in]
+        for port_out in self.dg.succ[port_in]:
+            areas.append(Times(self.dg[port_in][port_out]['length'],
+                               self.dg[port_in][port_out]['width']
+                               ))
+        total_area = Plus(areas)
+        return Times(total_area,
+                     Pow(Div(Times(Real(2),
+                                   port_in_named['pressure']
+                                   ),
+                             Real(port_in_named['density'])
+                             ),
+                         Real(0.5)
+                         ))
+
     def translate_schematic(self):
         """Validates that each node has the correct input and output
         conditions met then translates it into pysmt syntax
@@ -648,7 +715,7 @@ class Schematic():
         """
         # The translate method names are stored in a dictionary name where
         # the key is the name of that node or port kind, also run on channels
-        # and finish by constaining nodes to be within chip area
+        # (Edges) and finish by constaining nodes to be within chip area
         for name in self.dg.nodes:
             self.translation_strats[self.dg.nodes[name]['kind']](name)
         for name in self.dg.edges:
@@ -656,8 +723,6 @@ class Schematic():
         for name in self.dg.nodes:
             self.translate_chip(name)
 
-    # TODO: add way of handling if there isn't enough information to solve but
-    # still returns solvable because the ranges can be anything
     def invoke_backend(self, _show):
         """Combine all of the SMT expressions into one expression to sent to Z3
         solver to determine solvability
