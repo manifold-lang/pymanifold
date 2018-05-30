@@ -30,7 +30,7 @@ class Schematic():
         self.translation_strats = {'input': self.translate_input,
                                    'output': self.translate_output,
                                    't-junction': self.translate_tjunc,
-                                   'rectangle': self.translate_rec_channel
+                                   'rectangle': self.translate_channel
                                    }
 
         # DiGraph that will contain all nodes and channels
@@ -39,12 +39,12 @@ class Schematic():
     # TODO: All parameters for channel and ports need to have units documented
     #       depending on the formula
     def channel(self,
-                min_length,
-                min_width,
-                min_height,
                 port_from,
                 port_to,
-                min_channel_length=0,
+                min_length=-1,
+                min_width=-1,
+                min_height=-1,
+                min_channel_length=-1,
                 shape='rectangle',
                 phase='None'):
         """Create new connection between two nodes/ports with attributes
@@ -69,55 +69,49 @@ class Schematic():
             raise ValueError("port_from node doesn't exist")
         elif port_to not in self.dg.nodes():
             raise ValueError("port_to node doesn't exist")
-        try:
-            # Each value must be greater than 0
-            if min_length < 0 or min_width < 0 or min_height < 0 or min_channel_length < 0:
-                raise ValueError
-        except TypeError as e:
-            raise TypeError("This port parameter must be int %s" % e)
-        except ValueError as e:
-            raise ValueError("This port parameter must be > 0 %s" % e)
-
-        # Can't have two of the same channel
-        if (port_from, port_to) in self.dg.nodes:
-            raise ValueError("Channel already exists between these nodes")
-        # Create this edge in the graph
-        self.dg.add_edge(port_from, port_to)
 
         # Add the information about that connection to another dict
         # There's extra parameters in here than in the arguments because they
         # are values calculated by later methods when creating the SMT eqns
         attributes = {'shape': shape,
-                      'length': Symbol(port_from
-                                       + port_to
-                                       + '_length',
+                      'length': Symbol('_'.join([port_from, port_to, 'length']),
                                        REAL),
                       'min_length': min_length,
-                      'width': Symbol(port_from
-                                      + port_to
-                                      + '_width',
+                      'width': Symbol('_'.join([port_from, port_to, 'width']),
                                       REAL),
                       'min_width': min_width,
-                      'height': Symbol(port_from
-                                       + port_to
-                                       + '_height',
+                      'height': Symbol('_'.join([port_from, port_to, 'height']),
                                        REAL),
                       'min_height': min_height,
-                      'flow_rate': Symbol(port_from + port_to + '_flow_rate', REAL),
-                      'droplet_volume': Symbol(port_from
-                                               + port_to
-                                               + '_Dvol',
-                                               REAL),
-                      'viscosity': Symbol(port_from
-                                          + port_to
-                                          + '_viscosity',
+                      'flow_rate': Symbol('_'.join([port_from, port_to, 'flow_rate']),
                                           REAL),
-                      'resistance': Symbol(port_from
-                                           + port_to
-                                           + '_res',
+                      'droplet_volume': Symbol('_'.join([port_from, port_to, 'Dvol']),
+                                               REAL),
+                      'viscosity': Symbol('_'.join([port_from, port_to, 'viscosity']),
+                                          REAL),
+                      'resistance': Symbol('_'.join([port_from, port_to, 'res']),
                                            REAL),
                       'phase': phase.lower(),
                       }
+
+        # list of values that should all be positive numbers
+        not_neg = ['min_length', 'min_width', 'min_height']
+        for param in not_neg:
+            try:
+                if attributes[param] < -1:
+                    raise ValueError("channel '%s' parameter '%s' must be >= 0"
+                                     % (param))
+            except TypeError as e:
+                raise TypeError("channel %s parameter must be int" % param)
+            except ValueError as e:
+                raise ValueError(e)
+
+        # Can't have two of the same channel
+        if (port_from, port_to) in self.dg.edges:
+            raise ValueError("Channel already exists between these nodes")
+        # Create this edge in the graph
+        self.dg.add_edge(port_from, port_to)
+
         for key, attr in attributes.items():
             # Store as False instead of 0 to prevent any further
             # operations from accepting this value by mistake
@@ -132,8 +126,8 @@ class Schematic():
     # TODO: Should X and Y be forced to be >0 for triangle area calc?
     # TODO: There are similar arguments for both port and node that could be
     #       simplified if they were inhereted from a common object
-    def port(self, name, kind, min_pressure=0, min_flow_rate=0, x=0, y=0,
-             density=1, min_viscosity=0):
+    def port(self, name, kind, min_pressure=-1, min_flow_rate=-1, x=-1, y=-1,
+             density=1, min_viscosity=-1):
         """Create new port where fluids can enter or exit the circuit, any
         optional tag left empty will be converted to a variable for the SMT
         solver to solve for a give a value
@@ -165,7 +159,8 @@ class Schematic():
                       'min_pressure': min_pressure,
                       'flow_rate': Symbol(name+'_flow_rate', REAL),
                       'min_flow_rate': min_flow_rate,
-                      'density': density,  # Density will always be defined
+                      'density': Symbol(name+'_density', REAL),
+                      'min_density': density,
                       'x': Symbol(name+'_X', REAL),
                       'y': Symbol(name+'_Y', REAL),
                       'min_x': x,
@@ -173,29 +168,30 @@ class Schematic():
                       }
 
         # list of values that should all be positive numbers
-        not_neg = ['min_x', 'min_y', 'min_pressure', 'min_flow_rate', 'min_viscosity',
-                   'density']
-        try:
-            for param in not_neg:
-                if attributes[param] < 0:
-                    raise ValueError("port '%s' parameter '%s' must be > 0" %
+        not_neg = ['min_x', 'min_y', 'min_pressure', 'min_flow_rate',
+                   'min_viscosity', 'min_density']
+        for param in not_neg:
+            try:
+                if attributes[param] < -1:
+                    raise ValueError("port '%s' parameter '%s' must be >= 0" %
                                      (name, param))
-        except TypeError as e:
-            raise TypeError("port '%s' parameter must be int %s" % (name, e))
-        except ValueError as e:
-            raise ValueError(e)
+            except TypeError as e:
+                raise TypeError("port '%s' parameter '%s' must be int" %
+                                (name, param))
+            except ValueError as e:
+                raise ValueError(e)
 
         # Create this node in the graph
         self.dg.add_node(name)
         for key, attr in attributes.items():
-            if attr == 0:
+            if attr == -1:
                 # Store as False instead of 0 to prevent any further
                 # operations from accepting this value by mistake
                 self.dg.nodes[name][key] = False
             else:
                 self.dg.nodes[name][key] = attr
 
-    def node(self, name, x=0, y=0, kind='node'):
+    def node(self, name, x=-1, y=-1, kind='node'):
         """Create new node where fluids merge or split, kind of node
         (T-junction, Y-junction, cross, etc.) can be specified
         if not then a basical node connecting multiple channels will be created
@@ -205,8 +201,8 @@ class Schematic():
             raise TypeError("name and kind must be strings")
         if name in self.dg.nodes:
             raise ValueError("Must provide a unique name")
-        if kind.lower() not in self.translate_nodes.keys():
-            raise ValueError("kind must be %s" % self.translate_nodes.keys())
+        if kind.lower() not in self.translation_strats.keys():
+            raise ValueError("kind must be %s" % self.translation_strats.keys())
 
         # Ports are stored with nodes because ports are just a specific type of
         # node that has a constant flow rate
@@ -215,6 +211,7 @@ class Schematic():
                       'pressure': Symbol(name+'_pressure', REAL),
                       'flow_rate': Symbol(name+'_flow_rate', REAL),
                       'viscosity': Symbol(name+'_viscosity', REAL),
+                      'density': Symbol(name+'_density', REAL),
                       'x': Symbol(name+'_X', REAL),
                       'y': Symbol(name+'_Y', REAL),
                       'min_x': x,
@@ -222,22 +219,22 @@ class Schematic():
                       }
 
         # list of values that should all be positive numbers
-        not_neg = ['min_x', 'min_y', 'min_pressure', 'min_flow_rate', 'min_viscosity',
-                   'density']
-        try:
-            for param in not_neg:
-                if attributes[param] < 0:
-                    raise ValueError("port '%s' parameter '%s' must be > 0" %
+        not_neg = ['min_x', 'min_y']
+        for param in not_neg:
+            try:
+                if attributes[param] < -1:
+                    raise ValueError("port '%s' parameter '%s' must be >= 0" %
                                      (name, param))
-        except TypeError as e:
-            raise TypeError("This port parameter must be int %s" % e)
-        except ValueError as e:
-            raise ValueError(e)
+            except TypeError as e:
+                raise TypeError("Port '%s' parameter '%s' must be int" %
+                                (name, param))
+            except ValueError as e:
+                raise ValueError(e)
 
         # Create this node in the graph
         self.dg.add_node(name)
         for key, attr in attributes.items():
-            if attr == 0:
+            if attr == -1:
                 # Store as False instead of 0 to prevent any further
                 # operations from accepting this value by mistake
                 self.dg.nodes[name][key] = False
@@ -287,6 +284,12 @@ class Schematic():
                                      ))
         else:
             self.exprs.append(GE(named_node['viscosity'], Real(0)))
+        if named_node['density']:
+            self.exprs.append(Equals(named_node['density'],
+                                     Real(named_node['min_density'])
+                                     ))
+        else:
+            self.exprs.append(GE(named_node['density'], Real(0)))
 
     # TODO: Find out how output and input need to be different, currently they
     #       are exactly the same, perhaps change how translation happens to
@@ -326,6 +329,12 @@ class Schematic():
                                      ))
         else:
             self.exprs.append(GE(named_node['viscosity'], Real(0)))
+        if named_node['density']:
+            self.exprs.append(Equals(named_node['density'],
+                                     Real(named_node['min_density'])
+                                     ))
+        else:
+            self.exprs.append(GE(named_node['density'], Real(0)))
 
     # TODO: Refactor this to be just translate_channel and have it use the
     #       correct formula depending on the shape of the given channel
@@ -333,7 +342,7 @@ class Schematic():
     #       could be confusing to debug since one would look for port parameter
     #       issues in translate input or output, not here, making these
     #       method be called only when traversing the graph would rectify this
-    def translate_rec_channel(self, name):
+    def translate_channel(self, name):
         """Create SMT2 expressions for a given channel (edges in networkx naming)
         currently only works for channels with a rectangular shape, but should
         be expanded to include circular and parabolic
@@ -345,6 +354,8 @@ class Schematic():
             raise KeyError('Channel %s does not exist' % name)
         port_in_name = name[0]
         port_out_name = name[1]
+        port_in = self.dg.nodes[port_in_name]
+        port_out = self.dg.nodes[port_out_name]
 
         # Use pythagorean theorem to assert that the channel be greater than
         # the min_channel_length if no value is provided, or set the length
@@ -358,17 +369,18 @@ class Schematic():
             self.exprs.append(GT(named_channel['length'], Real(0)))
 
         # Create expression to force length to equal distance between end nodes
-        self.exprs.append(self.pythagorean_length(port_in_name,
-                                                  port_out_name,
+        self.exprs.append(self.pythagorean_length(port_in,
+                                                  port_out,
                                                   named_channel['length']
                                                   ))
 
         # Assert that viscosity in channel equals input node viscosity
         # set output viscosity to equal input since this should be constant
+        # This must be performed before calculating resistance
         self.exprs.append(Equals(named_channel['viscosity'],
-                                 self.dg.nodes[port_in_name]['viscosity']))
-        self.exprs.append(Equals(self.dg.nodes[port_out_name]['viscosity'],
-                                 self.dg.nodes[port_in_name]['viscosity']))
+                                 port_in['viscosity']))
+        self.exprs.append(Equals(port_out['viscosity'],
+                                 port_in['viscosity']))
 
         # Assert channel width, height viscosity and resistance greater
         # than 0
@@ -385,31 +397,28 @@ class Schematic():
         # which is needed to make resistance formula valid, second is the SMT
         # equation of the resistance
         self.exprs.append(resistance_list[0])
-        resistance = resistance_list[1]
-        flow_rate = self.calculate_port_flow_rate(port_in_name)
-        output_pressure = self.channel_output_pressure(
-                              self.dg.nodes[port_in_name]['pressure'],
-                              resistance,
-                              flow_rate)
 
         # Assert resistance to equal value calculated for rectangular channel
+        resistance = resistance_list[1]
         self.exprs.append(Equals(named_channel['resistance'], resistance))
         self.exprs.append(GE(named_channel['resistance'], Real(0)))
         named_channel['resistance'] = resistance
 
         # Assert flow rate equal to calcuated value, in channel and ports
+        flow_rate = self.calculate_port_flow_rate(port_in_name)
         self.exprs.append(Equals(named_channel['flow_rate'], flow_rate))
-        self.exprs.append(Equals(self.dg.nodes[port_in_name]['flow_rate'],
+        self.exprs.append(Equals(port_in['flow_rate'],
                                  flow_rate))
-        self.exprs.append(Equals(self.dg.nodes[port_out_name]['flow_rate'],
+        self.exprs.append(Equals(port_out['flow_rate'],
                                  flow_rate))
 
         # Assert pressure in output to equal calcualted value based on P=QR
-        self.exprs.append(Equals(self.dg.nodes[port_out_name]['pressure'],
+        output_pressure = self.channel_output_pressure(name)
+        self.exprs.append(Equals(port_out['pressure'],
                                  output_pressure))
-        self.exprs.append(GE(self.dg.nodes[port_out_name]['pressure'],
+        self.exprs.append(GE(port_out['pressure'],
                              Real(0)))
-        self.dg.nodes[port_out_name]['pressure'] = output_pressure
+        port_out['pressure'] = output_pressure
         return
 
     # TODO: assert node position here and for ports
@@ -425,8 +434,8 @@ class Schematic():
         # Position x and y symbols must equal their assigned value, if not
         # assigned then set to be greater than 0
         if named_node['min_x']:
-            self.exprs.append(Equals(named_node['x'], named_node['min_x']))
-            self.exprs.append(Equals(named_node['y'], named_node['min_y']))
+            self.exprs.append(Equals(named_node['x'], Real(named_node['min_x'])))
+            self.exprs.append(Equals(named_node['y'], Real(named_node['min_y'])))
         else:
             self.exprs.append(GE(named_node['x'], Real(0)))
             self.exprs.append(GE(named_node['y'], Real(0)))
@@ -437,65 +446,73 @@ class Schematic():
     #       translation methods
     def translate_tjunc(self, name, critCrossingAngle=0.5):
         # Validate input
-        if len(self.connections[name]) > 1:
-            raise ValueError("T-Junction must only have one output")
-        output_node = self.connections[name][0]
-        outputs = [key for key, value in self.connections.items()
-                   if name in value]
-        num_connections = len(outputs) + 1  # +1 to include the output node
-        if num_connections != 3:
+        if self.dg.size(name) != 3:
             raise ValueError("T-junction %s must have 3 connections" % name)
 
         # Since T-junction is just a specialized node, call translate node
         self.translate_node(name)
 
-        junction_node = name
+        junction_node_name = name
+        junction_node = self.dg.nodes[name]
+        # Since there should only be one output node, this can be found first
+        # from the dict of successors
+        try:
+            output_node_name = list(dict(self.dg.succ[name]).keys())[0]
+            output_node = self.dg.nodes[output_node_name]
+            output_channel = self.dg[name][output_node_name]
+        except KeyError as e:
+            raise KeyError("T-junction must have only one output")
+        # these will be found later from iterating through the dict of
+        # predecessor nodes to the junction node
         continuous_node = ''
-        dispersed_node = ''
-        output_channel = self.channels[name+output_node]
         continuous_channel = ''
+        dispersed_node = ''
         dispersed_channel = ''
-        for node_from, node_to_list in self.connections.items():
-            if name in node_to_list:
-                if self.channels[node_from+name]['phase'] == 'continuous':
-                    continuous_node = node_from
-                    continuous_channel = self.channels[continuous_node+name]
-                    # assert width and height to be equal to output
-                    self.exprs.append(Equals(continuous_channel['width'],
-                                             output_channel['width']
-                                             ))
-                    self.exprs.append(Equals(continuous_channel['height'],
-                                             output_channel['height']
-                                             ))
-                elif self.channels[node_from+name]['phase'] == 'dispersed':
-                    dispersed_node = node_from
-                    dispersed_channel = self.channels[dispersed_node+name]
-                    # Assert that only the height of channel be equal
-                    self.exprs.append(Equals(dispersed_channel['height'],
-                                             output_channel['height']
-                                             ))
-                else:
-                    raise ValueError("Invalid phase for T-junction: %s" %
-                                     name)
+        # NetworkX allows for the creation of dicts that contain all of
+        # the edges containing a certain attribute, in this case phase is
+        # of interest
+        phases = nx.get_edge_attributes(self.dg, 'phase')
+        for pred_node, phase in phases.items():
+            if phase == 'continuous':
+                continuous_node = self.dg.nodes[pred_node[0]]
+                continuous_channel = self.dg[pred_node[0]][junction_node_name]
+                # assert width and height to be equal to output
+                self.exprs.append(Equals(continuous_channel['width'],
+                                         output_channel['width']
+                                         ))
+                self.exprs.append(Equals(continuous_channel['height'],
+                                         output_channel['height']
+                                         ))
+            elif phase == 'dispersed':
+                dispersed_node = self.dg.nodes[pred_node[0]]
+                dispersed_channel = self.dg[pred_node[0]][junction_node_name]
+                # Assert that only the height of channel be equal
+                self.exprs.append(Equals(dispersed_channel['height'],
+                                         output_channel['height']
+                                         ))
+            elif phase == 'output':
+                continue
+            else:
+                raise ValueError("Invalid phase for T-junction: %s" % name)
 
         # Epsilon, sharpness of T-junc, must be greater than 0
         epsilon = Symbol('epsilon', REAL)
         self.exprs.append(GE(epsilon, Real(0)))
 
         # Pressure at each of the 4 nodes must be equal
-        self.exprs.append(Equals(self.nodes[name]['pressure'],
-                                 self.nodes[continuous_node]['pressure']
+        self.exprs.append(Equals(junction_node['pressure'],
+                                 continuous_node['pressure']
                                  ))
-        self.exprs.append(Equals(self.nodes[name]['pressure'],
-                                 self.nodes[dispersed_node]['pressure']
+        self.exprs.append(Equals(junction_node['pressure'],
+                                 dispersed_node['pressure']
                                  ))
-        self.exprs.append(Equals(self.nodes[name]['pressure'],
-                                 self.nodes[output_node]['pressure']
+        self.exprs.append(Equals(junction_node['pressure'],
+                                 output_node['pressure']
                                  ))
 
         # Viscosity in continous phase equals viscosity at output
-        self.exprs.append(Equals(self.nodes[continuous_node]['viscosity'],
-                                 self.nodes[output_node]['viscosity']
+        self.exprs.append(Equals(continuous_node['viscosity'],
+                                 output_node['viscosity']
                                  ))
 
         # Droplet volume in channel equals calculated droplet volume
@@ -512,19 +529,19 @@ class Schematic():
                                      output_channel['width'],
                                      dispersed_channel['width'],
                                      epsilon,
-                                     self.nodes[dispersed_node]['flow_rate'],
-                                     self.nodes[continuous_node]['flow_rate']
+                                     dispersed_node['flow_rate'],
+                                     continuous_node['flow_rate']
                                  )))
 
         # Retrieve symbols for each node
-        nxC = self.nodes[continuous_node]['position_sym'][0]
-        nyC = self.nodes[continuous_node]['position_sym'][1]
-        nxO = self.nodes[output_node]['position_sym'][0]
-        nyO = self.nodes[output_node]['position_sym'][1]
-        nxJ = self.nodes[junction_node]['position_sym'][0]
-        nyJ = self.nodes[junction_node]['position_sym'][1]
-        nxD = self.nodes[dispersed_node]['position_sym'][0]
-        nyD = self.nodes[dispersed_node]['position_sym'][1]
+        nxC = continuous_node['x']
+        nyC = continuous_node['y']
+        nxO = output_node['x']
+        nyO = output_node['y']
+        nxJ = junction_node['x']
+        nyJ = junction_node['y']
+        nxD = dispersed_node['x']
+        nyD = dispersed_node['y']
         # Retrieve symbols for channel lengths
         lenC = continuous_channel['length']
         lenO = output_channel['length']
@@ -571,9 +588,9 @@ class Schematic():
                                                         )))
 
         # Assert channel length equal to the sum of the squares of the legs
-        self.exprs.append(self.pythagorean_length([nxC, nyC], [nxJ, nyJ], lenC))
-        self.exprs.append(self.pythagorean_length([nxD, nyD], [nxJ, nyJ], lenD))
-        self.exprs.append(self.pythagorean_length([nxJ, nyJ], [nxO, nyO], lenO))
+        self.exprs.append(self.pythagorean_length(continuous_node, junction_node, lenC))
+        self.exprs.append(self.pythagorean_length(dispersed_node, junction_node, lenD))
+        self.exprs.append(self.pythagorean_length(junction_node, output_node, lenO))
 
     # TODO: In Manifold this has the option for worst case analysis, need to
     #       understand when this is needed and implement it if needed
@@ -591,12 +608,16 @@ class Schematic():
                       Times(chV, chR)
                       )
 
-    def channel_output_pressure(self, P_in, chR, chV):
+    def channel_output_pressure(self, channel_name):
         """Calculate the pressure at the output of a channel
         P_in - pressure at beginning of channel
         chR - channel resistance
         chV - channel flow rate
         """
+        channel = self.dg.edges[channel_name]
+        P_in = self.dg.nodes[channel_name[0]]['pressure']
+        chR = channel['resistance']
+        chV = channel['flow_rate']
         return Minus(P_in,
                      Times(chR, chV))
 
@@ -623,7 +644,7 @@ class Schematic():
 
     # TODO: Could redesign this to just take in the name of a channel
     #       and have it get the input and output ports and length
-    def pythagorean_length(self, node_a, node_b, ch_len):
+    def pythagorean_length(self, node1, node2, ch_len):
         """Use Pythagorean theorem to assert that the channel length
         (hypoteneuse) squared is equal to the legs squared so channel
         length is solved for
@@ -631,8 +652,6 @@ class Schematic():
         :param str node2: Name of the other node for the channel
         :param Real ch_len: Channel length, must be a pysmt Real or variable
         """
-        node1 = self.dg.nodes[node_a]
-        node2 = self.dg.nodes[node_b]
         side_a = Minus(node1['x'], node2['x'])
         side_b = Minus(node1['y'], node2['y'])
         a_squared = Pow(side_a, Real(2))
@@ -739,7 +758,7 @@ class Schematic():
                      Pow(Div(Times(Real(2),
                                    port_in_named['pressure']
                                    ),
-                             Real(port_in_named['density'])
+                             port_in_named['density']
                              ),
                          Real(0.5)
                          ))
