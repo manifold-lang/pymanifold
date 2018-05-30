@@ -369,10 +369,7 @@ class Schematic():
             self.exprs.append(GT(named_channel['length'], Real(0)))
 
         # Create expression to force length to equal distance between end nodes
-        self.exprs.append(self.pythagorean_length(port_in,
-                                                  port_out,
-                                                  named_channel['length']
-                                                  ))
+        self.exprs.append(self.pythagorean_length(name))
 
         # Assert that viscosity in channel equals input node viscosity
         # set output viscosity to equal input since this should be constant
@@ -391,7 +388,7 @@ class Schematic():
         # the channel as calculated by calculate_channel_resistance and
         # delta(P) = flow_rate * resistance
         # pressure_out = pressure_in - delta(P)
-        resistance_list = self.calculate_channel_resistance(named_channel)
+        resistance_list = self.calculate_channel_resistance(name)
 
         # First term is assertion that each channel's height is less than width
         # which is needed to make resistance formula valid, second is the SMT
@@ -465,8 +462,10 @@ class Schematic():
         # these will be found later from iterating through the dict of
         # predecessor nodes to the junction node
         continuous_node = ''
+        continuous_node_name = ''
         continuous_channel = ''
         dispersed_node = ''
+        dispersed_node_name = ''
         dispersed_channel = ''
         # NetworkX allows for the creation of dicts that contain all of
         # the edges containing a certain attribute, in this case phase is
@@ -474,8 +473,9 @@ class Schematic():
         phases = nx.get_edge_attributes(self.dg, 'phase')
         for pred_node, phase in phases.items():
             if phase == 'continuous':
-                continuous_node = self.dg.nodes[pred_node[0]]
-                continuous_channel = self.dg[pred_node[0]][junction_node_name]
+                continuous_node_name = pred_node[0]
+                continuous_node = self.dg.nodes[continuous_node_name]
+                continuous_channel = self.dg[continuous_node_name][junction_node_name]
                 # assert width and height to be equal to output
                 self.exprs.append(Equals(continuous_channel['width'],
                                          output_channel['width']
@@ -484,8 +484,9 @@ class Schematic():
                                          output_channel['height']
                                          ))
             elif phase == 'dispersed':
-                dispersed_node = self.dg.nodes[pred_node[0]]
-                dispersed_channel = self.dg[pred_node[0]][junction_node_name]
+                dispersed_node_name = pred_node[0]
+                dispersed_node = self.dg.nodes[dispersed_node_name]
+                dispersed_channel = self.dg[dispersed_node_name][junction_node_name]
                 # Assert that only the height of channel be equal
                 self.exprs.append(Equals(dispersed_channel['height'],
                                          output_channel['height']
@@ -587,50 +588,50 @@ class Schematic():
                                                         [nxD, nyD]
                                                         )))
 
-        # Assert channel length equal to the sum of the squares of the legs
-        self.exprs.append(self.pythagorean_length(continuous_node, junction_node, lenC))
-        self.exprs.append(self.pythagorean_length(dispersed_node, junction_node, lenD))
-        self.exprs.append(self.pythagorean_length(junction_node, output_node, lenO))
-
     # TODO: In Manifold this has the option for worst case analysis, need to
     #       understand when this is needed and implement it if needed
-    def simple_pressure_flow(self, _channel):
+    def simple_pressure_flow(self, channel_name):
         """Assert difference in pressure at the two end nodes for a channel
         equals the flow rate in the channel times the channel resistance
         More complicated calculation available through
-        analytical_pressure_flow method
+        analytical_pressure_flow method (TBD)
+        :param str channel_name: Name of the channel
         """
-        p1 = self.nodes[_channel['port_from']]['pressure']
-        p2 = self.nodes[_channel['port_to']]['pressure']
-        chV = _channel['flow_rate']
-        chR = _channel['resistance']
+        channel = self.dg.edges[channel_name]
+        port_from = self.dg.nodes[channel_name[0]]
+        port_to = self.dg.nodes[channel_name[1]]
+        p1 = port_from['pressure']
+        p2 = port_to['pressure']
+        Q = channel['flow_rate']
+        R = channel['resistance']
         return Equals(Minus(p1, p2),
-                      Times(chV, chR)
+                      Times(Q, R)
                       )
 
     def channel_output_pressure(self, channel_name):
-        """Calculate the pressure at the output of a channel
-        P_in - pressure at beginning of channel
-        chR - channel resistance
-        chV - channel flow rate
+        """Calculate the pressure at the output of a channel using
+        P_out = R * Q - P_in
+        :param str channel_name: Name of the channel
         """
         channel = self.dg.edges[channel_name]
         P_in = self.dg.nodes[channel_name[0]]['pressure']
-        chR = channel['resistance']
-        chV = channel['flow_rate']
+        R = channel['resistance']
+        Q = channel['flow_rate']
         return Minus(P_in,
-                     Times(chR, chV))
+                     Times(R, Q))
 
-    def calculate_channel_resistance(self, _channel):
+    def calculate_channel_resistance(self, channel_name):
         """Calculate the droplet resistance in a channel using:
         R = (12 * mu * L) / (w * h^3 * (1 - 0.630 (h/w)) )
         This formula assumes that channel height < width, so
         the first term returned is the assertion for that
+        :param str channel_name: Name of the channel
         """
-        w = _channel['width']
-        h = _channel['height']
-        mu = _channel['viscosity']
-        chL = _channel['length']
+        channel = self.dg.edges[channel_name]
+        w = channel['width']
+        h = channel['height']
+        mu = channel['viscosity']
+        chL = channel['length']
         return (LT(h, w),
                 Div(Times(Real(12),
                           Times(mu, chL)
@@ -644,20 +645,21 @@ class Schematic():
 
     # TODO: Could redesign this to just take in the name of a channel
     #       and have it get the input and output ports and length
-    def pythagorean_length(self, node1, node2, ch_len):
+    def pythagorean_length(self, channel_name):
         """Use Pythagorean theorem to assert that the channel length
         (hypoteneuse) squared is equal to the legs squared so channel
         length is solved for
-        :param str node1: Name of one node for the channel
-        :param str node2: Name of the other node for the channel
-        :param Real ch_len: Channel length, must be a pysmt Real or variable
+        :param str channel_name: Name of the channel
         """
-        side_a = Minus(node1['x'], node2['x'])
-        side_b = Minus(node1['y'], node2['y'])
+        channel = self.dg.edges[channel_name]
+        port_from = self.dg.nodes[channel_name[0]]
+        port_to = self.dg.nodes[channel_name[1]]
+        side_a = Minus(port_from['x'], port_to['x'])
+        side_b = Minus(port_from['y'], port_to['y'])
         a_squared = Pow(side_a, Real(2))
         b_squared = Pow(side_b, Real(2))
         a_squared_plus_b_squared = Plus(a_squared, b_squared)
-        c_squared = Pow(ch_len, Real(2))
+        c_squared = Pow(channel['length'], Real(2))
         return Equals(a_squared_plus_b_squared, c_squared)
 
     def cosine_law_crit_angle(self, node1, node2, node3):
