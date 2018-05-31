@@ -1,6 +1,6 @@
 import pymanifold as pymf
 
-sch = pymf.Schematic()
+sch = pymf.Schematic([0, 0, 10, 10])
 #       D
 #       |
 #   C---N---O
