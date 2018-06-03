@@ -45,7 +45,7 @@ class Schematic():
                 min_width=-1,
                 min_height=-1,
                 min_channel_length=-1,
-                shape='rectangle',
+                kind='rectangle',
                 phase='None'):
         """Create new connection between two nodes/ports with attributes
         consisting of the dimensions of the channel to be used to create the
@@ -56,20 +56,20 @@ class Schematic():
         :param float min_length: (optional) constrain channel to be this long
         :param float width: (optional) constrain channel to be this wide
         :param float height: (optional) constrain channel to be this wide
-        :param str shape: shape of cross section of the channel
+        :param str kind: kind of cross section of the channel
         :param str phase: for channels connecting to a T-junction this must be
                           either continuous, dispersed or output
         :returns: None -- no issues with creating this channel
         :raises: TypeError if an input parameter is wrong type
                  ValueError if an input parameter has an invalid value
         """
-        # Collection of the shapes for which there are methods to calculate their
+        # Collection of the kinds for which there are methods to calculate their
         # channel resistance
-        valid_shapes = ("rectangle")
+        valid_kinds = ("rectangle")
 
         # Checking that arguments are valid
-        if shape not in valid_shapes:
-            raise ValueError("Valid channel shapes are: %s" % valid_shapes)
+        if kind not in valid_kinds:
+            raise ValueError("Valid channel kinds are: %s" % valid_kinds)
         if port_from not in self.dg.nodes:
             raise ValueError("port_from node doesn't exist")
         elif port_to not in self.dg.nodes():
@@ -80,7 +80,7 @@ class Schematic():
         # are values calculated by later methods when creating the SMT eqns
         # Channels do not have pressure though, since it decreases linearly
         # across the channel
-        attributes = {'shape': shape,
+        attributes = {'kind': kind,
                       'length': Symbol('_'.join([port_from, port_to, 'length']),
                                        REAL),
                       'min_length': min_length,
@@ -285,9 +285,8 @@ class Schematic():
         self.exprs.append(LE(named_node['y'], Real(self.dim[3])))
         return
 
-    # TODO: assert node position here and for ports
     # TODO: need way for sum of flow_in to equal flow out for input and output
-    #       ports
+    #       ports where flow is coming from outside the chip
     def translate_node(self, name):
         """Create SMT expressions for bounding the parameters of an node
         to be within the constraints defined by the user
@@ -347,8 +346,12 @@ class Schematic():
         :param name: Name of the port to be constrained
         :returns: None -- no issues with translating the port parameters to SMT
         """
-        if len(list(self.dg.neighbors(name))) <= 0:
+        if self.dg.size(name) <= 0:
             raise ValueError("Port %s must have 1 or more connections" % name)
+        # Currently don't support this, and I don't think it would be the case
+        # in real circuits, an input port is considered the beginning of a branch
+        if len(list(self.dg.predecessors(name))) != 0:
+            raise ValueError("Cannot have channels into input port %s" % name)
 
         # Since input is a type of node, call translate node
         self.translate_node(name)
@@ -356,16 +359,29 @@ class Schematic():
         # Name is just a string, this gets the corresponding dictionary of
         # attributes and their values stored by NetworkX
         named_node = self.dg.nodes[name]
+
+        # Calculate flow rate for this port based on pressure and channels out
+        flow_rate = self.calculate_port_flow_rate(name)
+        self.exprs.append(Equals(named_node['flow_rate'], flow_rate))
+
+        # To recursively traverse, call on all successor channels
+        for node_out in self.dg.succ[name]:
+            self.translation_strats[self.dg.edges[(name, node_out)]['kind']]((name, node_out))
         return
 
     def translate_output(self, name):
         """Create SMT expressions for bounding the parameters of an output port
         to be within the constraints defined by the user
+
         :param name: Name of the port to be constrained
         :returns: None -- no issues with translating the port parameters to SMT
         """
         if self.dg.size(name) <= 0:
             raise ValueError("Port %s must have 1 or more connections" % name)
+        # Currently don't support this, and I don't think it would be the case
+        # in real circuits, an output port is considered the end of a branch
+        if len(list(self.dg.succ[name])) != 0:
+            raise ValueError("Cannot have channels out of output port %s" % name)
 
         # Since input is just a specialized node, call translate node
         self.translate_node(name)
@@ -373,9 +389,21 @@ class Schematic():
         # Name is just a string, this gets the corresponding dictionary of
         # attributes and their values stored by NetworkX
         named_node = self.dg.nodes[name]
+        # The flow rate at this node is the sum of the flow rates of the
+        # the channel coming in (I think, should be verified)
+        total_flow_in = []
+        for channel_in in self.dg.pred[name]:
+            total_flow_in.append(self.dg.edges[(channel_in, name)]['flow_rate'])
+        if len(total_flow_in) == 1:
+            self.exprs.append(Equals(named_node['flow_rate'],
+                                     total_flow_in[0]))
+        else:
+            self.exprs.append(Equals(named_node['flow_rate'],
+                                     Plus(total_flow_in)))
+
         return
 
-    # TODO: Refactor to use different formulas depending on the shape of the channel
+    # TODO: Refactor to use different formulas depending on the kind of the channel
     #       Also some port parameters are calculated here like flow rate which
     #       could be confusing to debug since one would look for port parameter
     #       issues in translate input or output, not here, making these
@@ -405,12 +433,22 @@ class Schematic():
 
         # Set the length determined by pythagorean theorem equal to the user
         # provided number if provided, else assert that the length be greater
-        # than 0
+        # than 0, same for width and height
         if named_channel['min_length']:
             self.exprs.append(Equals(named_channel['length'],
                                      Real(named_channel['min_length'])))
         else:
             self.exprs.append(GT(named_channel['length'], Real(0)))
+        if named_channel['min_width']:
+            self.exprs.append(Equals(named_channel['width'],
+                                     Real(named_channel['min_width'])))
+        else:
+            self.exprs.append(GT(named_channel['width'], Real(0)))
+        if named_channel['min_height']:
+            self.exprs.append(Equals(named_channel['height'],
+                                     Real(named_channel['min_height'])))
+        else:
+            self.exprs.append(GT(named_channel['height'], Real(0)))
 
         # Assert that viscosity in channel equals input node viscosity
         # Set output viscosity to equal input since this should be constant
@@ -420,11 +458,7 @@ class Schematic():
         self.exprs.append(Equals(port_out['viscosity'],
                                  port_in['viscosity']))
 
-        # Assert channel width and height greater than 0
-        self.exprs.append(GT(named_channel['width'], Real(0)))
-        self.exprs.append(GT(named_channel['height'], Real(0)))
-
-        # Assert pressure at end of channel is lower based on the resistance of
+        # Pressure at end of channel is lower based on the resistance of
         # the channel as calculated by calculate_channel_resistance and
         # pressure_out = pressure_in * (flow_rate * resistance)
         resistance_list = self.calculate_channel_resistance(name)
@@ -436,27 +470,19 @@ class Schematic():
         resistance = resistance_list[1]
         self.exprs.append(Equals(named_channel['resistance'], resistance))
         self.exprs.append(GT(named_channel['resistance'], Real(0)))
-        named_channel['resistance'] = resistance
 
         # Assert flow rate equal to calcuated value, in channel and ports
-        # TODO: Condition when flow_rate is negative, either warn user or fail
-        flow_rate = self.calculate_port_flow_rate(port_in_name)
-        self.exprs.append(Equals(named_channel['flow_rate'], flow_rate))
-        self.exprs.append(Equals(port_in['flow_rate'],
-                                 flow_rate))
-        self.exprs.append(Equals(port_out['flow_rate'],
-                                 flow_rate))
-        named_channel['flow_rate'] = flow_rate
-        port_out['flow_rate'] = flow_rate
+        self.exprs.append(Equals(named_channel['flow_rate'],
+                                 port_in['flow_rate']))
 
         # Assert pressure in output to equal calcualted value based on P=QR
         # Channels do not have pressure because it decreases across channel
         output_pressure = self.channel_output_pressure(name)
         self.exprs.append(Equals(port_out['pressure'],
                                  output_pressure))
-        self.exprs.append(GT(port_out['pressure'],
-                             Real(0)))
-        port_out['pressure'] = output_pressure
+
+        # Call translate on the output to continue traversing the channel
+        self.translation_strats[port_out['kind']](port_out_name)
         return
 
     # TODO: Migrate this to work with NetworkX
@@ -537,6 +563,13 @@ class Schematic():
                                  output_node['viscosity']
                                  ))
 
+        # Flow rate into the t-junction equals the flow rate out
+        self.exprs.append(Equals(Plus(continuous_channel['flow_rate'],
+                                      dispersed_channel['flow_rate']
+                                      ),
+                                 output_channel['flow_rate']
+                                 ))
+
         # Droplet volume in channel equals calculated droplet volume
         # TODO: Manifold also has a table of constraints in the Schematic and
         # sets ChannelDropletVolume equal to dropletVolumeConstraint, however
@@ -608,6 +641,8 @@ class Schematic():
                                                         [nxJ, nyJ],
                                                         [nxD, nyD]
                                                         )))
+        # Call translate on output
+        self.translation_strats[output_node['kind']](output_node_name)
 
     # TODO: In Manifold this has the option for worst case analysis, which is
     #       used to adjust the constraints in the case when there is no
@@ -804,13 +839,29 @@ class Schematic():
         Generates SMT formulas to simulate specialized nodes like T-junctions
         and stores them in self.exprs
         """
+        # if schematic has no input then it is invalid
+        has_input = False
+
         # The translate method names are stored in a dictionary name where
-        # the key is the name of that node or port kind, also run on channels
-        # (Edges) and finish by constaining nodes to be within chip area
+        # the key is the kind of that node and Call on all input nodes and it
+        # will recursive traverse the circuit
         for name in self.dg.nodes:
-            self.translation_strats[self.dg.nodes[name]['kind']](name)
-        for name in self.dg.edges:
-            self.translation_strats[self.dg.edges[name]['shape']](name)
+            kind = self.dg.nodes[name]['kind']
+            if kind == 'input':
+                has_input = True
+                # first ensure that it has an output
+                has_output = False
+                for node_after in self.dg.succ[name]:
+                    if self.dg.nodes[node_after]['kind'] == 'output':
+                        has_output = True
+                        # Input has output, so call translate on input
+                        self.translation_strats[kind](name)
+                if not has_output:
+                    raise ValueError('Schematic input %s has no output' % name)
+        if not has_input:
+            raise ValueError('Schematic has no input')
+
+        # finish by constaining nodes to be within chip area
         for name in self.dg.nodes:
             self.translate_chip(name)
         return
