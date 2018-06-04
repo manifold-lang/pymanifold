@@ -41,10 +41,9 @@ class Schematic():
     def channel(self,
                 port_from,
                 port_to,
-                min_length=-1,
-                min_width=-1,
-                min_height=-1,
-                min_channel_length=-1,
+                min_length=False,
+                min_width=False,
+                min_height=False,
                 kind='rectangle',
                 phase='None'):
         """Create new connection between two nodes/ports with attributes
@@ -107,7 +106,9 @@ class Schematic():
         not_neg = ['min_length', 'min_width', 'min_height']
         for param in not_neg:
             try:
-                if attributes[param] < -1:
+                if attributes[param] is False:
+                    continue
+                elif attributes[param] < 0:
                     raise ValueError("channel '%s' parameter '%s' must be >= 0"
                                      % (param))
             except TypeError as e:
@@ -121,13 +122,9 @@ class Schematic():
         # Create this edge in the graph
         self.dg.add_edge(port_from, port_to)
 
+        # Add argument to attributes within NetworkX
         for key, attr in attributes.items():
-            # Store as False instead of 0 to prevent any further
-            # operations from accepting this value by mistake
-            if attr == 0:
-                self.dg.edges[port_from, port_to][key] = False
-            else:
-                self.dg.edges[port_from, port_to][key] = attr
+            self.dg.edges[port_from, port_to][key] = attr
         return
 
     # TODO: Add ability to specify a fluid type in the node (ie. water) and
@@ -135,8 +132,15 @@ class Schematic():
     # TODO: Should X and Y be forced to be >0 for triangle area calc?
     # TODO: There are similar arguments for both port and node that could be
     #       simplified if they were inhereted from a common object
-    def port(self, name, kind, min_pressure=-1, min_flow_rate=-1, x=-1, y=-1,
-             density=1, min_viscosity=-1):
+    def port(self,
+             name,
+             kind,
+             min_pressure=False,
+             min_flow_rate=False,
+             x=False,
+             y=False,
+             density=1,
+             min_viscosity=False):
         """Create new port where fluids can enter or exit the circuit, any
         optional tag left empty will be converted to a variable for the SMT
         solver to solve for a give a value
@@ -185,7 +189,9 @@ class Schematic():
                    'min_viscosity', 'min_density']
         for param in not_neg:
             try:
-                if attributes[param] < -1:
+                if attributes[param] is False:
+                    continue
+                elif attributes[param] < 0:
                     raise ValueError("port '%s' parameter '%s' must be >= 0" %
                                      (name, param))
             except TypeError as e:
@@ -196,16 +202,12 @@ class Schematic():
 
         # Create this node in the graph
         self.dg.add_node(name)
+        # Add argument to attributes within NetworkX
         for key, attr in attributes.items():
-            if attr == -1:
-                # Store as False instead of 0 to prevent any further
-                # operations from accepting this value by mistake
-                self.dg.nodes[name][key] = False
-            else:
-                self.dg.nodes[name][key] = attr
+            self.dg.nodes[name][key] = attr
         return
 
-    def node(self, name, x=-1, y=-1, kind='node'):
+    def node(self, name, x=False, y=False, kind='node'):
         """Create new node where fluids merge or split, kind of node
         (T-junction, Y-junction, cross, etc.) can be specified
         if not then a basical node connecting multiple channels will be created
@@ -252,7 +254,7 @@ class Schematic():
         not_neg = ['min_x', 'min_y']
         for param in not_neg:
             try:
-                if attributes[param] < -1:
+                if attributes[param] < 0:
                     raise ValueError("port '%s' parameter '%s' must be >= 0" %
                                      (name, param))
             except TypeError as e:
@@ -263,12 +265,8 @@ class Schematic():
 
         # Create this node in the graph
         self.dg.add_node(name)
+        # Add argument to attributes within NetworkX
         for key, attr in attributes.items():
-            if attr == -1:
-                # Store as False instead of 0 to prevent any further
-                # operations from accepting this value by mistake
-                self.dg.nodes[name][key] = False
-            else:
                 self.dg.nodes[name][key] = attr
         return
 
@@ -310,12 +308,14 @@ class Schematic():
                                      ))
         else:
             self.exprs.append(GE(named_node['pressure'], Real(0)))
+
         if named_node['min_x']:
             self.exprs.append(Equals(named_node['x'], Real(named_node['min_x'])))
             self.exprs.append(Equals(named_node['y'], Real(named_node['min_y'])))
         else:
             self.exprs.append(GE(named_node['x'], Real(0)))
             self.exprs.append(GE(named_node['y'], Real(0)))
+
         if named_node['min_flow_rate']:
             self.exprs.append(Equals(named_node['flow_rate'],
                                      Real(named_node['min_flow_rate'])
@@ -328,6 +328,7 @@ class Schematic():
                                      ))
         else:
             self.exprs.append(GE(named_node['viscosity'], Real(0)))
+
         if named_node['min_density']:
             self.exprs.append(Equals(named_node['density'],
                                      Real(named_node['min_density'])
@@ -349,7 +350,7 @@ class Schematic():
         if self.dg.size(name) <= 0:
             raise ValueError("Port %s must have 1 or more connections" % name)
         # Currently don't support this, and I don't think it would be the case
-        # in real circuits, an input port is considered the beginning of a branch
+        # in real circuits, an input port is the beginning of the traversal
         if len(list(self.dg.predecessors(name))) != 0:
             raise ValueError("Cannot have channels into input port %s" % name)
 
@@ -361,12 +362,15 @@ class Schematic():
         named_node = self.dg.nodes[name]
 
         # Calculate flow rate for this port based on pressure and channels out
-        flow_rate = self.calculate_port_flow_rate(name)
-        self.exprs.append(Equals(named_node['flow_rate'], flow_rate))
+        # if not specified by user
+        if not named_node['min_flow_rate']:
+            flow_rate = self.calculate_port_flow_rate(name)
+            self.exprs.append(Equals(named_node['flow_rate'], flow_rate))
 
         # To recursively traverse, call on all successor channels
         for node_out in self.dg.succ[name]:
-            self.translation_strats[self.dg.edges[(name, node_out)]['kind']]((name, node_out))
+            self.translation_strats[self.dg.edges[(name, node_out)]['kind']](
+                    (name, node_out))
         return
 
     def translate_output(self, name):
@@ -389,18 +393,21 @@ class Schematic():
         # Name is just a string, this gets the corresponding dictionary of
         # attributes and their values stored by NetworkX
         named_node = self.dg.nodes[name]
-        # The flow rate at this node is the sum of the flow rates of the
-        # the channel coming in (I think, should be verified)
-        total_flow_in = []
-        for channel_in in self.dg.pred[name]:
-            total_flow_in.append(self.dg.edges[(channel_in, name)]['flow_rate'])
-        if len(total_flow_in) == 1:
-            self.exprs.append(Equals(named_node['flow_rate'],
-                                     total_flow_in[0]))
-        else:
-            self.exprs.append(Equals(named_node['flow_rate'],
-                                     Plus(total_flow_in)))
-
+        # Calculate flow rate for this port based on pressure and channels out
+        # if not specified by user
+        if not named_node['min_flow_rate']:
+            # The flow rate at this node is the sum of the flow rates of the
+            # the channel coming in (I think, should be verified)
+            total_flow_in = []
+            for channel_in in self.dg.pred[name]:
+                total_flow_in.append(self.dg.edges[(channel_in, name)]
+                                     ['flow_rate'])
+            if len(total_flow_in) == 1:
+                self.exprs.append(Equals(named_node['flow_rate'],
+                                         total_flow_in[0]))
+            else:
+                self.exprs.append(Equals(named_node['flow_rate'],
+                                         Plus(total_flow_in)))
         return
 
     # TODO: Refactor to use different formulas depending on the kind of the channel
@@ -471,7 +478,7 @@ class Schematic():
         self.exprs.append(Equals(named_channel['resistance'], resistance))
         self.exprs.append(GT(named_channel['resistance'], Real(0)))
 
-        # Assert flow rate equal to calcuated value, in channel and ports
+        # Assert flow rate equal to the flow rate coming in
         self.exprs.append(Equals(named_channel['flow_rate'],
                                  port_in['flow_rate']))
 
@@ -547,16 +554,16 @@ class Schematic():
         epsilon = Symbol('epsilon', REAL)
         self.exprs.append(GE(epsilon, Real(0)))
 
-        # Pressure at each of the 4 nodes must be equal
-        self.exprs.append(Equals(junction_node['pressure'],
-                                 continuous_node['pressure']
-                                 ))
-        self.exprs.append(Equals(junction_node['pressure'],
-                                 dispersed_node['pressure']
-                                 ))
-        self.exprs.append(Equals(junction_node['pressure'],
-                                 output_node['pressure']
-                                 ))
+        #  # Pressure at each of the 4 nodes must be equal
+        #  self.exprs.append(Equals(junction_node['pressure'],
+        #                           continuous_node['pressure']
+        #                           ))
+        #  self.exprs.append(Equals(junction_node['pressure'],
+        #                           dispersed_node['pressure']
+        #                           ))
+        #  self.exprs.append(Equals(junction_node['pressure'],
+        #                           output_node['pressure']
+        #                           ))
 
         # Viscosity in continous phase equals viscosity at output
         self.exprs.append(Equals(continuous_node['viscosity'],
@@ -851,8 +858,10 @@ class Schematic():
                 has_input = True
                 # first ensure that it has an output
                 has_output = False
-                for node_after in self.dg.succ[name]:
-                    if self.dg.nodes[node_after]['kind'] == 'output':
+                # TODO: Need to create list of output + input nodes to see if
+                #       they connect
+                for x, y in self.dg.nodes(data=True):
+                    if y['kind'] == 'output':
                         has_output = True
                         # Input has output, so call translate on input
                         self.translation_strats[kind](name)
@@ -861,7 +870,7 @@ class Schematic():
         if not has_input:
             raise ValueError('Schematic has no input')
 
-        # finish by constaining nodes to be within chip area
+        # finish by constraining nodes to be within chip area
         for name in self.dg.nodes:
             self.translate_chip(name)
         return

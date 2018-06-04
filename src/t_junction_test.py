@@ -8,8 +8,8 @@ continuous_node = 'continuous'
 dispersed_node = 'dispersed'
 output_node = 'out'
 junction_node = 't_j'
-min_channel_length = 0.01
-min_channel_width = 0.001
+min_channel_length = 1
+min_channel_width = 1
 min_channel_height = 0.001
 
 # Continuous and output node should have same flow rate
@@ -24,23 +24,14 @@ sch.node(junction_node, 1, 0, kind='t-junction')
 # syntax: sch.channel(shape, min_length, width, height, input, output)
 sch.channel(junction_node,
             output_node,
-            min_channel_length,
-            min_channel_width,
-            min_channel_height,
             phase='output'
             )
 sch.channel(continuous_node,
             junction_node,
-            min_channel_length,
-            min_channel_width,
-            min_channel_height,
             phase='continuous'
             )
 sch.channel(dispersed_node,
             junction_node,
-            min_channel_length,
-            min_channel_width,
-            min_channel_height,
             phase='dispersed'
             )
 
