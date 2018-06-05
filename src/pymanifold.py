@@ -20,7 +20,8 @@ class Schematic():
         """Store the connections as a dictionary to form a graph where each
         value is a list of all nodes/ports that a node flows out to, store
         information about each of the channels in a separate dictionary
-        dim - dimensions of the chip, [X_min, Y_min, X_max, X_min]
+
+        :param list dim: dimensions of the chip, [X_min, Y_min, X_max, X_min] (m)
         """
         self.exprs = []
         self.dim = dim
@@ -49,15 +50,16 @@ class Schematic():
         """Create new connection between two nodes/ports with attributes
         consisting of the dimensions of the channel to be used to create the
         SMT equations to calculate solvability of the circuit
+        Units are in brackets
 
-        :param str port_from: port where fluid comes into the channel from
-        :param str port_to: port at the end of the channel where fluid exits
-        :param float min_length: (optional) constrain channel to be this long (m)
-        :param float width: (optional) constrain channel to be this wide (m)
-        :param float height: (optional) constrain channel to be this wide (m)
-        :param str kind: kind of cross section of the channel
-        :param str phase: for channels connecting to a T-junction this must be
-                          either continuous, dispersed or output
+        :param str port_from: Port where fluid comes into the channel from
+        :param str port_to: Port at the end of the channel where fluid exits
+        :param float min_length: Constrain channel to be this long (m)
+        :param float width: Constrain channel to be this wide (m)
+        :param float height: Constrain channel to be this wide (m)
+        :param str kind: Kind of cross section of the channel (rectangle)
+        :param str phase: For channels connecting to a T-junction this must be
+            either continuous, dispersed or output
         :returns: None -- no issues with creating this channel
         :raises: TypeError if an input parameter is wrong type
                  ValueError if an input parameter has an invalid value
@@ -215,7 +217,7 @@ class Schematic():
         :param float x:  Set the X position of this node (m)
         :param float y:  Set the Y position of this node (m)
         :param str kind: The type of node this is, default is node, other
-                         option is t-junction
+            option is t-junction
         :returns: None -- no issues with creating this node
         :raises: TypeError if an input parameter is wrong type
                  ValueError if an input parameter has an invalid value
@@ -273,6 +275,7 @@ class Schematic():
     def translate_chip(self, name):
         """Create SMT expressions for bounding the nodes to be within constraints
         of the overall chip such as its area provided
+
         :param name: Name of the node to be constrained
         :returns: None -- no issues with translating the chip constraints
         """
@@ -288,6 +291,7 @@ class Schematic():
     def translate_node(self, name):
         """Create SMT expressions for bounding the parameters of an node
         to be within the constraints defined by the user
+
         :param name: Name of the node to be constrained
         :returns: None -- no issues with translating the port parameters to SMT
         """
@@ -344,6 +348,7 @@ class Schematic():
     def translate_input(self, name):
         """Create SMT expressions for bounding the parameters of an input port
         to be within the constraints defined by the user
+
         :param name: Name of the port to be constrained
         :returns: None -- no issues with translating the port parameters to SMT
         """
@@ -377,7 +382,7 @@ class Schematic():
         """Create SMT expressions for bounding the parameters of an output port
         to be within the constraints defined by the user
 
-        :param name: Name of the port to be constrained
+        :param str name: Name of the port to be constrained
         :returns: None -- no issues with translating the port parameters to SMT
         """
         if self.dg.size(name) <= 0:
@@ -419,6 +424,7 @@ class Schematic():
         """Create SMT expressions for a given channel (edges in NetworkX naming)
         currently only works for channels with a rectangular shape, but should
         be expanded to include circular and parabolic
+
         :param str name: The name of the channel to generate SMT equations for
         :returns: None -- no issues with translating channel parameters to SMT
         :raises: KeyError, if channel is not found in the list of defined edges
@@ -495,7 +501,18 @@ class Schematic():
     # TODO: Migrate this to work with NetworkX
     # TODO: Refactor some of these calculations so they can be reused by other
     #       translation methods
-    def translate_tjunc(self, name, critCrossingAngle=0.5):
+    def translate_tjunc(self, name, crit_crossing_angle=0.5):
+        """Create SMT expressions for a t-junction node that generates droplets
+        Must have 2 input channels (continuous and dispersed phases) and one
+        output channel where the droplets leave the node. Continuous is usually
+        oil and dispersed is usually water
+
+        :param str name: The name of the channel to generate SMT equations for
+        :param crit_crossing_angle: The angle of the dispersed channel to
+            the continuous must be great than this to have droplet generation
+        :returns: None -- no issues with translating channel parameters to SMT
+        :raises: KeyError, if channel is not found in the list of defined edges
+        """
         # Validate input
         if self.dg.size(name) != 3:
             raise ValueError("T-junction %s must have 3 connections" % name)
@@ -625,24 +642,24 @@ class Schematic():
 
         # Assert critical angle is <= calculated angle
         cosine_squared_theta_crit = Real(math.cos(
-            math.radians(critCrossingAngle))**2)
+            math.radians(crit_crossing_angle))**2)
         # Continuous to dispersed
         self.exprs.append(LE(cosine_squared_theta_crit,
-                             self.cosine_law_crit_angle([nxC, nyC],
-                                                        [nxJ, nyJ],
-                                                        [nxD, nyD]
+                             self.cosine_law_crit_angle(continuous_node_name,
+                                                        junction_node_name,
+                                                        dispersed_node_name
                                                         )))
         # Continuous to output
         self.exprs.append(LE(cosine_squared_theta_crit,
-                             self.cosine_law_crit_angle([nxC, nyC],
-                                                        [nxJ, nyJ],
-                                                        [nxO, nyO]
+                             self.cosine_law_crit_angle(continuous_node_name,
+                                                        junction_node_name,
+                                                        output_node_name
                                                         )))
         # Output to dispersed
         self.exprs.append(LE(cosine_squared_theta_crit,
-                             self.cosine_law_crit_angle([nxO, nyO],
-                                                        [nxJ, nyJ],
-                                                        [nxD, nyD]
+                             self.cosine_law_crit_angle(output_node_name,
+                                                        junction_node_name,
+                                                        dispersed_node_name
                                                         )))
         # Call translate on output
         self.translation_strats[output_node['kind']](output_node_name)
@@ -679,7 +696,7 @@ class Schematic():
 
         :param str channel_name: Name of the channel
         :returns: SMT expression of the difference between pressure
-                  into the channel and R*Q
+            into the channel and R*Q
         """
         channel = self.dg.edges[channel_name]
         P_in = self.dg.nodes[channel_name[0]]['pressure']
@@ -697,8 +714,8 @@ class Schematic():
 
         :param str channel_name: Name of the channel
         :returns: list -- two SMT expressions, first asserts
-                  that channel height is less than width,
-                  second is the above expression in SMT form
+            that channel height is less than width, second
+            is the above expression in SMT form
         """
         channel = self.dg.edges[channel_name]
         w = channel['width']
@@ -723,7 +740,7 @@ class Schematic():
 
         :param str channel_name: Name of the channel
         :returns: SMT expression of the equality of the side lengths squared
-                  and the channel length squared
+            and the channel length squared
         """
         channel = self.dg.edges[channel_name]
         port_from = self.dg.nodes[channel_name[0]]
@@ -739,7 +756,7 @@ class Schematic():
     # TODO: Refactor this to make it take in the names of the 2 channels
     #       for the angle to be determined between instead of the three
     #       nodes, also check that they actually connect somewhere
-    def cosine_law_crit_angle(self, node1, node2, node3):
+    def cosine_law_crit_angle(self, node1_name, node2_name, node3_name):
         """Use cosine law to find cos^2(theta) between three points
         node1---node2---node3 to assert that it is less than cos^2(thetaC)
         where thetaC is the critical crossing angle
@@ -749,11 +766,14 @@ class Schematic():
         :param node3: Outside node
         :returns: cos^2 as calculated using cosine law (a_dot_b^2/a^2*b^2)
         """
+        node1 = self.dg.nodes[node1_name]
+        node2 = self.dg.nodes[node2_name]
+        node3 = self.dg.nodes[node3_name]
         # Lengths of channels
-        aX = Minus(node1[0], node2[0])
-        aY = Minus(node1[1], node2[1])
-        bX = Minus(node3[0], node2[0])
-        bY = Minus(node3[1], node2[1])
+        aX = Minus(node1['x'], node2['x'])
+        aY = Minus(node1['y'], node2['y'])
+        bX = Minus(node3['x'], node2['x'])
+        bY = Minus(node3['y'], node2['y'])
         # Dot products between each channel
         a_dot_b_squared = Pow(Plus(Times(aX, bX),
                                    Times(aY, bY)
