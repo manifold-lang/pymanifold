@@ -52,9 +52,9 @@ class Schematic():
 
         :param str port_from: port where fluid comes into the channel from
         :param str port_to: port at the end of the channel where fluid exits
-        :param float min_length: (optional) constrain channel to be this long
-        :param float width: (optional) constrain channel to be this wide
-        :param float height: (optional) constrain channel to be this wide
+        :param float min_length: (optional) constrain channel to be this long (m)
+        :param float width: (optional) constrain channel to be this wide (m)
+        :param float height: (optional) constrain channel to be this wide (m)
         :param str kind: kind of cross section of the channel
         :param str phase: for channels connecting to a T-junction this must be
                           either continuous, dispersed or output
@@ -139,21 +139,20 @@ class Schematic():
              min_flow_rate=False,
              x=False,
              y=False,
-             density=1,
+             density=False,
              min_viscosity=False):
         """Create new port where fluids can enter or exit the circuit, any
         optional tag left empty will be converted to a variable for the SMT
-        solver to solve for a give a value
+        solver to solve for a give a value, units in brackets
 
         :param str name: The name of the port to use when defining channels
         :param str kind: Define if this is an 'input' or 'output' port
-        :param float density: Density of fluid in g/cm^3, default is 1(water)
-        :param float min_viscosity: Viscosity of the fluid, units are Pa.s
-        :param float min_pressure: Pressure of the input fluid, units are Pa
-        :param float min_flow_rate - flow rate of input fluid, units are m^3/s
-                                     (may want to make it smaller, um^3/s)
-        :param float X: x-position of port on chip schematic
-        :param float Y: y-position of port on chip schematic
+        :param float density: Density of fluid (kg/m^3)
+        :param float min_viscosity: Viscosity of the fluid (Pa*s)
+        :param float min_pressure: Pressure of the input fluid, (Pa)
+        :param float min_flow_rate - flow rate of input fluid, (m^3/s)
+        :param float X: x-position of port on chip schematic (m)
+        :param float Y: y-position of port on chip schematic (m)
         :returns: None -- no issues with creating this port
         :raises: TypeError if an input parameter is wrong type
                  ValueError if an input parameter has an invalid value
@@ -208,12 +207,13 @@ class Schematic():
         return
 
     def node(self, name, x=False, y=False, kind='node'):
-        """Create new node where fluids merge or split, kind of node
-        (T-junction, Y-junction, cross, etc.) can be specified
-        if not then a basical node connecting multiple channels will be created
-        :param str name: Name of the node to use later when connecting to a channel
-        :param float x: (optional) Set the X position of this node
-        :param float y: (optional) Set the Y position of this node
+        """Create new node where fluids merge or split, kind of node (T-junction,
+        Y-junction, cross, etc.) can be specified if not then a basic node
+        connecting multiple channels will be created, units in brackets
+
+        :param str name: Name of the node to use when connecting to a channel
+        :param float x:  Set the X position of this node (m)
+        :param float y:  Set the Y position of this node (m)
         :param str kind: The type of node this is, default is node, other
                          option is t-junction
         :returns: None -- no issues with creating this node
@@ -307,7 +307,7 @@ class Schematic():
                                      Real(named_node['min_pressure'])
                                      ))
         else:
-            self.exprs.append(GE(named_node['pressure'], Real(0)))
+            self.exprs.append(GT(named_node['pressure'], Real(0)))
 
         if named_node['min_x']:
             self.exprs.append(Equals(named_node['x'], Real(named_node['min_x'])))
@@ -321,20 +321,20 @@ class Schematic():
                                      Real(named_node['min_flow_rate'])
                                      ))
         else:
-            self.exprs.append(GE(named_node['flow_rate'], Real(0)))
+            self.exprs.append(GT(named_node['flow_rate'], Real(0)))
         if named_node['min_viscosity']:
             self.exprs.append(Equals(named_node['viscosity'],
                                      Real(named_node['min_viscosity'])
                                      ))
         else:
-            self.exprs.append(GE(named_node['viscosity'], Real(0)))
+            self.exprs.append(GT(named_node['viscosity'], Real(0)))
 
         if named_node['min_density']:
             self.exprs.append(Equals(named_node['density'],
                                      Real(named_node['min_density'])
                                      ))
         else:
-            self.exprs.append(GE(named_node['density'], Real(0)))
+            self.exprs.append(GT(named_node['density'], Real(0)))
         return
 
     # TODO: Decide how output and input need to be different, currently they
@@ -604,10 +604,6 @@ class Schematic():
         nyJ = junction_node['y']
         nxD = dispersed_node['x']
         nyD = dispersed_node['y']
-        # Retrieve symbols for channel lengths
-        lenC = continuous_channel['length']
-        lenO = output_channel['length']
-        lenD = dispersed_channel['length']
 
         # Constrain that continuous and output ports are in a straight line by
         # setting the area of the triangle formed between those two points and
@@ -659,6 +655,7 @@ class Schematic():
         equals the flow rate in the channel times the channel resistance
         More complicated calculation available through
         analytical_pressure_flow method (TBD)
+
         :param str channel_name: Name of the channel
         :returns: SMT expression of equality between delta(P) and Q*R
         """
@@ -678,6 +675,8 @@ class Schematic():
     def channel_output_pressure(self, channel_name):
         """Calculate the pressure at the output of a channel using
         P_out = R * Q - P_in
+        Unit for pressure is Pascals - kg/(m*s^2)
+
         :param str channel_name: Name of the channel
         :returns: SMT expression of the difference between pressure
                   into the channel and R*Q
@@ -694,6 +693,8 @@ class Schematic():
         R = (12 * mu * L) / (w * h^3 * (1 - 0.630 (h/w)) )
         This formula assumes that channel height < width, so
         the first term returned is the assertion for that
+        Unit for resistance is kg/(m^4*s)
+
         :param str channel_name: Name of the channel
         :returns: list -- two SMT expressions, first asserts
                   that channel height is less than width,
@@ -719,6 +720,7 @@ class Schematic():
         """Use Pythagorean theorem to assert that the channel length
         (hypoteneuse) squared is equal to the legs squared so channel
         length is solved for
+
         :param str channel_name: Name of the channel
         :returns: SMT expression of the equality of the side lengths squared
                   and the channel length squared
@@ -741,6 +743,11 @@ class Schematic():
         """Use cosine law to find cos^2(theta) between three points
         node1---node2---node3 to assert that it is less than cos^2(thetaC)
         where thetaC is the critical crossing angle
+
+        :param node1: Outside node
+        :param node2: Middle connecting node
+        :param node3: Outside node
+        :returns: cos^2 as calculated using cosine law (a_dot_b^2/a^2*b^2)
         """
         # Lengths of channels
         aX = Minus(node1[0], node2[0])
@@ -764,12 +771,16 @@ class Schematic():
 
     def calculate_droplet_volume(self, h, w, wIn, epsilon, qD, qC):
         """From paper DOI:10.1039/c002625e.
-        h=height of channel
-        w=width of continuous/output channel
-        wIn=width of dispersed_channel
-        epsilon=0.414*radius of rounded edge where channels join
-        qD=flow rate in dispersed_channel
-        qC=flow rate in continuous_channel
+        Calculating the droplet volume created in a T-junction
+        Unit is volume in m^3
+
+        :param Symbol h: Height of channel
+        :param Symbol w: Width of continuous/output channel
+        :param Symbol wIn: Width of dispersed_channel
+        :param Symbol epsilon: Equals 0.414*radius of rounded edge where
+                               channels join
+        :param Symbol qD: Flow rate in dispersed_channel
+        :param Symbol qC: Flow rate in continuous_channel
         """
         q_gutter = Real(0.1)
         # normalizedVFill = 3pi/8 - (pi/2)(1 - pi/4)(h/w)
@@ -823,6 +834,11 @@ class Schematic():
         area of the channel it flows into, the pressure and the density
         eqn from https://en.wikipedia.org/wiki/Hagen-Poiseuille_equation
         flow_rate = area * sqrt(2*pressure/density)
+        Unit for flow rate is m^3/s
+
+        :param str port_in: Name of the port
+        :returns: Flow rate determined from port pressure and area of
+                  connected channels
         """
         areas = []
         port_in_named = self.dg.nodes[port_in]
