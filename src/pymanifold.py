@@ -37,8 +37,6 @@ class Schematic():
         # DiGraph that will contain all nodes and channels
         self.dg = nx.DiGraph()
 
-    # TODO: All parameters for channel and ports need to have units documented
-    #       depending on the formula
     def channel(self,
                 port_from,
                 port_to,
@@ -131,7 +129,6 @@ class Schematic():
 
     # TODO: Add ability to specify a fluid type in the node (ie. water) and
     #       have this method automatically fill in the parameters for water
-    # TODO: Should X and Y be forced to be >0 for triangle area calc?
     # TODO: There are similar arguments for both port and node that could be
     #       simplified if they were inhereted from a common object
     def port(self,
@@ -286,8 +283,6 @@ class Schematic():
         self.exprs.append(LE(named_node['y'], Real(self.dim[3])))
         return
 
-    # TODO: need way for sum of flow_in to equal flow out for input and output
-    #       ports where flow is coming from outside the chip
     def translate_node(self, name):
         """Create SMT expressions for bounding the parameters of an node
         to be within the constraints defined by the user
@@ -298,6 +293,14 @@ class Schematic():
         # Name is just a string, this gets the corresponding dictionary of
         # attributes and their values stored by NetworkX
         named_node = self.dg.nodes[name]
+
+        if self.dg.pred[name]:
+            # This means that this node what channels flowing into it, so
+            # pressure must be calculated based on P=QR
+            # Channels do not have pressure because it decreases across channel
+            output_pressure = self.channel_output_pressure(name)
+            self.exprs.append(Equals(port_out['pressure'],
+                                     output_pressure))
 
         # If parameters are provided by the user, then set the
         # their Symbol equal to that value, otherwise make it greater than 0
@@ -341,10 +344,6 @@ class Schematic():
             self.exprs.append(GT(named_node['density'], Real(0)))
         return
 
-    # TODO: Decide how output and input need to be different, currently they
-    #       are exactly the same, perhaps change how translation happens to
-    #       have it traverse the graph, starting at inputs and calling
-    #       channel and output translation methods recursively
     def translate_input(self, name):
         """Create SMT expressions for bounding the parameters of an input port
         to be within the constraints defined by the user
@@ -488,19 +487,10 @@ class Schematic():
         self.exprs.append(Equals(named_channel['flow_rate'],
                                  port_in['flow_rate']))
 
-        # Assert pressure in output to equal calcualted value based on P=QR
-        # Channels do not have pressure because it decreases across channel
-        output_pressure = self.channel_output_pressure(name)
-        self.exprs.append(Equals(port_out['pressure'],
-                                 output_pressure))
-
         # Call translate on the output to continue traversing the channel
         self.translation_strats[port_out['kind']](port_out_name)
         return
 
-    # TODO: Migrate this to work with NetworkX
-    # TODO: Refactor some of these calculations so they can be reused by other
-    #       translation methods
     def translate_tjunc(self, name, crit_crossing_angle=0.5):
         """Create SMT expressions for a t-junction node that generates droplets
         Must have 2 input channels (continuous and dispersed phases) and one
@@ -520,8 +510,6 @@ class Schematic():
         # Since T-junction is just a specialized node, call translate node
         self.translate_node(name)
 
-        junction_node_name = name
-        junction_node = self.dg.nodes[name]
         # Since there should only be one output node, this can be found first
         # from the dict of successors
         try:
@@ -530,6 +518,9 @@ class Schematic():
             output_channel = self.dg[name][output_node_name]
         except KeyError as e:
             raise KeyError("T-junction must have only one output")
+        # Renaming for consistency with the other nodes
+        junction_node_name = name
+        junction_node = self.dg.nodes[name]
         # these will be found later from iterating through the dict of
         # predecessor nodes to the junction node
         continuous_node = ''
@@ -594,6 +585,12 @@ class Schematic():
                                  output_channel['flow_rate']
                                  ))
 
+        # Assert that continuous and output channels are in a straight line
+        self.exprs.append(self.channels_in_straight_line(continuous_node_name,
+                                                         junction_node_name,
+                                                         output_node_name
+                                                         ))
+
         # Droplet volume in channel equals calculated droplet volume
         # TODO: Manifold also has a table of constraints in the Schematic and
         # sets ChannelDropletVolume equal to dropletVolumeConstraint, however
@@ -611,34 +608,6 @@ class Schematic():
                                      dispersed_node['flow_rate'],
                                      continuous_node['flow_rate']
                                  )))
-
-        # Retrieve symbols for each node
-        nxC = continuous_node['x']
-        nyC = continuous_node['y']
-        nxO = output_node['x']
-        nyO = output_node['y']
-        nxJ = junction_node['x']
-        nyJ = junction_node['y']
-        nxD = dispersed_node['x']
-        nyD = dispersed_node['y']
-
-        # Constrain that continuous and output ports are in a straight line by
-        # setting the area of the triangle formed between those two points and
-        # the center of the t-junct to be 0
-        # Formula for area of a triangle given 3 points
-        # x_i (y_p − y_j ) + x_p (y_j − y_i ) + x_j (y_i − y_p ) / 2
-        self.exprs.append(Equals(Real(0),
-                                 Div(Plus(Times(nxC,
-                                                Minus(nyJ, nyO)
-                                                ),
-                                          Plus(Times(nxJ,
-                                                     Minus(nyO, nyC)
-                                                     ),
-                                               Times(nxO,
-                                                     Minus(nyC, nyJ)
-                                                     ))),
-                                     Real(2)
-                                     )))
 
         # Assert critical angle is <= calculated angle
         cosine_squared_theta_crit = Real(math.cos(
@@ -663,6 +632,46 @@ class Schematic():
                                                         )))
         # Call translate on output
         self.translation_strats[output_node['kind']](output_node_name)
+
+    def channels_in_straight_line(self, node1_name, node2_name, node3_name):
+        """Create expressions to assert that 2 channels are in a straight
+        line with each other by asserting that a triangle between the 2
+        end nodes and the middle node has zero area
+
+        :channel_name1: Name of one of the channels
+        :channel_name2: Name of the other channel
+        :returns: Expression asserting area of triangle formed between all
+            three nodes to be 0
+        """
+        # Check that these nodes connect
+        try:
+            self.dg[node1_name][node2_name]
+            self.dg[node2_name][node3_name]
+        except TypeError as e:
+            raise TypeError("Tried asserting that 2 channels are in a straight\
+                line but they aren't connected")
+
+        node1_named = self.dg.nodes[node1_name]
+        node2_named = self.dg.nodes[node2_name]
+        node3_named = self.dg.nodes[node3_name]
+
+        # Constrain that continuous and output ports are in a straight line by
+        # setting the area of the triangle formed between those two points and
+        # the center of the t-junct to be 0
+        # Formula for area of a triangle given 3 points
+        # x_i (y_p − y_j ) + x_p (y_j − y_i ) + x_j (y_i − y_p ) / 2
+        return Equals(Real(0),
+                      Div(Plus(Times(node1_named['x'],
+                                     Minus(node3_named['y'], node2_named['y'])
+                                     ),
+                               Plus(Times(node3_named['x'],
+                                          Minus(node2_named['y'], node1_named['y'])
+                                          ),
+                                    Times(node2_named['x'],
+                                          Minus(node1_named['y'], node3_named['y'])
+                                          ))),
+                          Real(2)
+                          ))
 
     # TODO: In Manifold this has the option for worst case analysis, which is
     #       used to adjust the constraints in the case when there is no
@@ -753,9 +762,6 @@ class Schematic():
         c_squared = Pow(channel['length'], Real(2))
         return Equals(a_squared_plus_b_squared, c_squared)
 
-    # TODO: Refactor this to make it take in the names of the 2 channels
-    #       for the angle to be determined between instead of the three
-    #       nodes, also check that they actually connect somewhere
     def cosine_law_crit_angle(self, node1_name, node2_name, node3_name):
         """Use cosine law to find cos^2(theta) between three points
         node1---node2---node3 to assert that it is less than cos^2(thetaC)
@@ -849,29 +855,29 @@ class Schematic():
         return Times(Times(h, Times(w, w)),
                      Plus(v_fill_simple, Times(alpha, Div(qD, qC))))
 
-    def calculate_port_flow_rate(self, port_in):
+    def calculate_port_flow_rate(self, port_name):
         """Calculate the flow rate into a port based on the cross sectional
         area of the channel it flows into, the pressure and the density
         eqn from https://en.wikipedia.org/wiki/Hagen-Poiseuille_equation
         flow_rate = area * sqrt(2*pressure/density)
         Unit for flow rate is m^3/s
 
-        :param str port_in: Name of the port
+        :param str port_name: Name of the port
         :returns: Flow rate determined from port pressure and area of
                   connected channels
         """
         areas = []
-        port_in_named = self.dg.nodes[port_in]
-        for port_out in self.dg.succ[port_in]:
-            areas.append(Times(self.dg[port_in][port_out]['length'],
-                               self.dg[port_in][port_out]['width']
+        port_named = self.dg.nodes[port_name]
+        for port_out in self.dg.succ[port_name]:
+            areas.append(Times(self.dg[port_name][port_out]['length'],
+                               self.dg[port_name][port_out]['width']
                                ))
         total_area = Plus(areas)
         return Times(total_area,
                      Pow(Div(Times(Real(2),
-                                   port_in_named['pressure']
+                                   port_named['pressure']
                                    ),
-                             port_in_named['density']
+                             port_named['density']
                              ),
                          Real(0.5)
                          ))
