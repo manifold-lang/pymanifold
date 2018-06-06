@@ -14,8 +14,6 @@ class Schematic():
     determine solvability of the circuit and the range of the parameters where
     it is still solvable
     """
-    # TODO schematic to JSON method following Manifold IR syntax
-
     def __init__(self, dim):
         """Store the connections as a dictionary to form a graph where each
         value is a list of all nodes/ports that a node flows out to, store
@@ -127,10 +125,6 @@ class Schematic():
             self.dg.edges[port_from, port_to][key] = attr
         return
 
-    # TODO: Add ability to specify a fluid type in the node (ie. water) and
-    #       have this method automatically fill in the parameters for water
-    # TODO: There are similar arguments for both port and node that could be
-    #       simplified if they were inhereted from a common object
     def port(self,
              name,
              kind,
@@ -294,13 +288,21 @@ class Schematic():
         # attributes and their values stored by NetworkX
         named_node = self.dg.nodes[name]
 
-        if self.dg.pred[name]:
-            # This means that this node what channels flowing into it, so
-            # pressure must be calculated based on P=QR
-            # Channels do not have pressure because it decreases across channel
-            output_pressure = self.channel_output_pressure(name)
-            self.exprs.append(Equals(port_out['pressure'],
-                                     output_pressure))
+        # Pressure at a node is the sum of the pressures flowing into it
+        output_pressures = []
+        for node_name in self.dg.pred[name]:
+            # This returns the nodes with channels that flowing into this node
+            # pressure calculated based on P=QR
+            # Could modify equation based on https://www.dolomite-microfluidics.com/wp-content/uploads/Droplet_Junction_Chip_characterisation_-_application_note.pdf
+            output_pressures.append(self.channel_output_pressure((node_name, name)))
+        if len(self.dg.pred[name]) == 1:
+            self.exprs.append(Equals(named_node['pressure'],
+                                     output_pressures[0]
+                                     ))
+        elif len(self.dg.pred[name]) > 1:
+            self.exprs.append(Equals(named_node['pressure'],
+                                     Plus(output_pressures)
+                                     ))
 
         # If parameters are provided by the user, then set the
         # their Symbol equal to that value, otherwise make it greater than 0
@@ -415,10 +417,6 @@ class Schematic():
         return
 
     # TODO: Refactor to use different formulas depending on the kind of the channel
-    #       Also some port parameters are calculated here like flow rate which
-    #       could be confusing to debug since one would look for port parameter
-    #       issues in translate input or output, not here, making these
-    #       method be called only when traversing the graph would rectify this
     def translate_channel(self, name):
         """Create SMT expressions for a given channel (edges in NetworkX naming)
         currently only works for channels with a rectangular shape, but should
@@ -487,6 +485,7 @@ class Schematic():
         self.exprs.append(Equals(named_channel['flow_rate'],
                                  port_in['flow_rate']))
 
+        # Channels do not have pressure because it decreases across channel
         # Call translate on the output to continue traversing the channel
         self.translation_strats[port_out['kind']](port_out_name)
         return
@@ -529,6 +528,7 @@ class Schematic():
         dispersed_node = ''
         dispersed_node_name = ''
         dispersed_channel = ''
+
         # NetworkX allows for the creation of dicts that contain all of
         # the edges containing a certain attribute, in this case phase is
         # of interest
@@ -562,6 +562,7 @@ class Schematic():
         epsilon = Symbol('epsilon', REAL)
         self.exprs.append(GE(epsilon, Real(0)))
 
+        # TODO: Figure out why original had this cause it doesn't seem true
         #  # Pressure at each of the 4 nodes must be equal
         #  self.exprs.append(Equals(junction_node['pressure'],
         #                           continuous_node['pressure']
