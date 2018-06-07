@@ -1,7 +1,7 @@
 from pprint import pprint
 import math
 import networkx as nx
-import matplotlib.pyplot as plt  # just for testing to show graph, may not keep
+#  import matplotlib.pyplot as plt  # include if you want to show graph
 from pysmt.shortcuts import Symbol, Plus, Times, Div, Pow, Equals, Real
 from pysmt.shortcuts import Minus, GE, GT, LE, LT, And, get_model, is_sat
 from pysmt.typing import REAL

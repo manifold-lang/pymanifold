@@ -27,14 +27,15 @@ solver library for python used to determine if the designed microfluidic circuit
 work and if so within what range of parameters.
 
 Once this is installed (remember to call ``` pysmt-install --z3 ``` to install the
-Z3 SMT solver within pysmt so it has a solver to use to solve the SMT2 equations this
-library generates) then you can use this library.
+Z3 SMT solver within pysmt and addit to you PYTHONPATH environment variable my calling
+``` pysmt-install --env ``` and running that command. This installs the Z3 solver my Microsoft
+to use to solve the SMT2 equations this.
 
 ### Installing
 
 Currently this is not on pip so to use it clone the repository using ```
-git clone https://github.com/jsreid13/pymanifold.git ``` and put the project within
-your python3 site packages (C:\\python35\Lib\site-packages on Windows, 
+git clone https://github.com/jsreid13/pymanifold.git ``` and put the script src/pymanifold.py
+within your python3 site packages (C:\\python35\Lib\site-packages on Windows, 
 /usr/local/lib/python3.5/dist-packages on Linux).
 
 ## Usage
@@ -105,6 +106,7 @@ the other two short ends. Steps:
 * Gather a database of real world microfluidic chip designs and information about their output
 * Implement a machine learning algorithm on this database to improve the library's accuracy in
 determining if different designs will work
+* Implement abstraction refinement from original project
 
 ## Authors
 
