@@ -125,6 +125,54 @@ class Schematic():
             self.dg.edges[port_from, port_to][key] = attr
         return
 
+    def retrieve(port_in, port_out, attr):
+      if(port_out == "None"):
+        return self.dg.edges[port_in][attr]
+      else:
+        return self.dg[port_in][port_out][attr]
+
+    def get_channel_shape(name, port_out="None"):
+        return retrieve(name, port_out, 'shape')
+
+    def get_channel_length(name, port_out="None"):
+        return retrieve(name, port_out, 'length')
+
+    def get_channel_min_length(name, port_out="None"):
+        return retrieve(name, port_out, 'min_length')
+
+    def get_channel_width(name, port_out="None"):
+        return retrieve(name, port_out, 'width')
+
+    def get_channel_min_width(name, port_out="None"):
+        return retrieve(name, port_out, 'min_width')
+
+    def get_channel_height(name, port_out="None"):
+        return retrieve(name, port_out, 'height')
+
+    def get_channel_min_height(name, port_out="None"):
+        return retrieve(name, port_out, 'min_height')
+
+    def get_channel_flow_rate(name, port_out="None"):
+        return retrieve(name, port_out, 'flow_rate')
+
+    def get_channel_droplet_volume(name, port_out="None"):
+        return retrieve(name, port_out, 'droplet_volume')
+
+    def get_channel_viscosity(name, port_out="None"):
+        return retrieve(name, port_out, 'viscosity')
+
+    def get_channel_resistance(name, port_out="None"):
+        return retrieve(name, port_out, 'resistance')
+
+    def get_channel_phase(name, port_out="None"):
+        return retrieve(name, port_out, 'phase')
+
+    def get_channel_port_from(name, port_out="None"):
+        return retrieve(name, port_out, 'port_from')
+
+    def get_channel_port_to(name, port_out="None"):
+        return retrieve(name, port_out, 'port_to')
+
     def port(self,
              name,
              kind,
@@ -263,6 +311,45 @@ class Schematic():
                 self.dg.nodes[name][key] = attr
         return
 
+    def get_node_kind(name):
+        return self.dg.nodes[name]['kind']
+
+    def get_node_pressure(name):
+        return self.dg.nodes[name]['pressure']
+
+    def get_node_min_pressure(name):
+        return self.dg.nodes[name]['min_pressure']
+
+    def get_node_flow_rate(name):
+        return self.dg.nodes[name]['flow_rate']
+
+    def get_node_min_flow_rate(name):
+        return self.dg.nodes[name]['min_flow_rate']
+
+    def get_node_viscosity(name):
+        return self.dg.nodes[name]['viscosity']
+
+    def get_node_min_viscosity(name):
+        return self.dg.nodes[name]['min_viscosity']
+
+    def get_node_density(name):
+        return self.dg.nodes[name]['density']
+
+    def get_node_min_density(name):
+        return self.dg.nodes[name]['min_density']
+
+    def get_node_x(name):
+        return self.dg.nodes[name]['x']
+
+    def get_node_y(name):
+        return self.dg.nodes[name]['y']
+
+    def get_node_min_x(name):
+        return self.dg.nodes[name]['min_x']
+
+    def get_node_min_y(name):
+        return self.dg.nodes[name]['min_y']
+        
     def translate_chip(self, name):
         """Create SMT expressions for bounding the nodes to be within constraints
         of the overall chip such as its area provided
