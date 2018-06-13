@@ -1,5 +1,4 @@
-import pymanifold as pymf
-from pprint import pprint
+import src.pymanifold as pymf
 
 sch = pymf.Schematic(dim=[0, 0, 10, 10])
 
