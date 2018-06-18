@@ -151,8 +151,7 @@ class Schematic():
              min_flow_rate=False,
              x=False,
              y=False,
-             density=False,
-             min_viscosity=False):
+             fluidName=False):
         """Create new port where fluids can enter or exit the circuit, any
         optional tag left empty will be converted to a variable for the SMT
         solver to solve for a give a value, units in brackets
@@ -177,18 +176,21 @@ class Schematic():
         if kind.lower() not in self.translation_strats.keys():
             raise ValueError("kind must be %s" % self.translation_strats.keys())
 
+        # Initialize fluid properties
+        fluid_properties = Fluid(fluidName)
+
         # Ports are stored with nodes because ports are just a specific type of
         # node that has a constant flow rate
         # only accept ports of the right kind (input or output)
         attributes = {'kind': kind.lower(),
                       'viscosity': Symbol(name+'_viscosity', REAL),
-                      'min_viscosity': min_viscosity,
+                      'min_viscosity': fluid_properties.min_viscosity,
                       'pressure': Symbol(name+'_pressure', REAL),
                       'min_pressure': min_pressure,
                       'flow_rate': Symbol(name+'_flow_rate', REAL),
                       'min_flow_rate': min_flow_rate,
                       'density': Symbol(name+'_density', REAL),
-                      'min_density': density,
+                      'min_density': fluid_properties.min_density,
                       'x': Symbol(name+'_X', REAL),
                       'y': Symbol(name+'_Y', REAL),
                       'min_x': x,
