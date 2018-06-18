@@ -7,6 +7,25 @@ from pysmt.shortcuts import Minus, GE, GT, LE, LT, And, get_model, is_sat
 from pysmt.typing import REAL
 from pysmt.logics import QF_NRA
 
+import Constants
+
+class Fluid():
+    
+  def __init__(self, fluid):
+    self.min_density = Constants.FluidProperties().getDesnity(fluid)
+    self.min_resistivity = Constants.FluidProperties().getResistivity(fluid)
+    self.min_viscosity = Constants.FluidProperties().getViscosity(fluid)
+    self.min_pressure = False
+
+  def updateFluidProperties(self, min_density=False, min_viscosity=False, min_pressure=False, min_resistivity=False):
+    self.min_density = min_density
+    self.min_resistivity = min_resistivity
+    self.min_viscosity = min_viscosity
+    self.min_pressure = min_pressure
+
+  def __repr__(self):
+    return repr((self.min_density, self.min_resistivity, self.min_viscosity, self.min_pressure))
+
 
 class Schematic():
     """Create new schematic which contains all of the connections and ports
