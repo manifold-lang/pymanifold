@@ -258,56 +258,98 @@ class Schematic():
                 self.dg.nodes[name][key] = attr
         return
 
-    def retrieve(self, name, attr):
-        if isinstance(name, tuple):
-            return self.dg.edges[name][attr]
-        elif isinstance(name, str):
-            return self.dg.nodes[name][attr]
+    def retrieve(self, port_in, port_out, attr):
+        if isinstance(port_in, tuple):
+            return self.dg.edges[port_in][attr]
+        elif isinstance(port_in, str):
+            if port_out is None:
+                return self.dg.nodes[port_in][attr]
+            else:
+                return self.dg.edges((port_in, port_out))[attr]
         else:
             raise ValueError("Tried to retrieve node or edge type and name\
                     wasn't tuple or string")
 
-    def get_channel_shape(self, port_in, port_out):
-        return self.retrieve((port_in, port_out), 'shape')
+    def get_channel_shape(self, port_in, port_out=None):
+        return self.retrieve(port_in, port_out, 'shape')
 
-    def get_channel_length(self, port_in, port_out):
-        return self.retrieve((port_in, port_out), 'length')
+    def get_channel_length(self, port_in, port_out=None):
+        return self.retrieve(port_in, port_out, 'length')
 
-    def get_channel_min_length(self, port_in, port_out):
-        return self.retrieve((port_in, port_out), 'min_length')
+    def get_channel_min_length(self, port_in, port_out=None):
+        return self.retrieve(port_in, port_out, 'min_length')
 
-    def get_channel_width(self, port_in, port_out):
-        return self.retrieve((port_in, port_out), 'width')
+    def get_channel_width(self, port_in, port_out=None):
+        return self.retrieve(port_in, port_out, 'width')
 
-    def get_channel_min_width(self, port_in, port_out):
-        return self.retrieve((port_in, port_out), 'min_width')
+    def get_channel_min_width(self, port_in, port_out=None):
+        return self.retrieve(port_in, port_out, 'min_width')
 
-    def get_channel_height(self, port_in, port_out):
-        return self.retrieve((port_in, port_out), 'height')
+    def get_channel_height(self, port_in, port_out=None):
+        return self.retrieve(port_in, port_out, 'height')
 
-    def get_channel_min_height(self, port_in, port_out):
-        return self.retrieve((port_in, port_out), 'min_height')
+    def get_channel_min_height(self, port_in, port_out=None):
+        return self.retrieve(port_in, port_out, 'min_height')
 
-    def get_channel_flow_rate(self, port_in, port_out):
-        return self.retrieve((port_in, port_out), 'flow_rate')
+    def get_channel_flow_rate(self, port_in, port_out=None):
+        return self.retrieve(port_in, port_out, 'flow_rate')
 
-    def get_channel_droplet_volume(self, port_in, port_out):
-        return self.retrieve((port_in, port_out), 'droplet_volume')
+    def get_channel_droplet_volume(self, port_in, port_out=None):
+        return self.retrieve(port_in, port_out, 'droplet_volume')
 
-    def get_channel_viscosity(self, port_in, port_out):
-        return self.retrieve((port_in, port_out), 'viscosity')
+    def get_channel_viscosity(self, port_in, port_out=None):
+        return self.retrieve(port_in, port_out, 'viscosity')
 
-    def get_channel_resistance(self, port_in, port_out):
-        return self.retrieve((port_in, port_out), 'resistance')
+    def get_channel_resistance(self, port_in, port_out=None):
+        return self.retrieve(port_in, port_out, 'resistance')
 
-    def get_channel_phase(self, port_in, port_out):
-        return self.retrieve((port_in, port_out), 'phase')
+    def get_channel_phase(self, port_in, port_out=None):
+        return self.retrieve(port_in, port_out, 'phase')
 
-    def get_channel_port_from(self, port_in, port_out):
-        return self.retrieve((port_in, port_out), 'port_from')
+    def get_channel_port_from(self, port_in, port_out=None):
+        return self.retrieve(port_in, port_out, 'port_from')
 
-    def get_channel_port_to(self, port_in, port_out):
-        return self.retrieve((port_in, port_out), 'port_to')
+    def get_channel_port_to(self, port_in, port_out=None):
+        return self.retrieve(port_in, port_out, 'port_to')
+
+    def get_node_kind(self, name):
+        return self.retrieve(name, None, 'kind')
+
+    def get_node_pressure(self, name):
+        return self.retrieve(name, None, 'pressure')
+
+    def get_node_min_pressure(self, name):
+        return self.retrieve(name, None, 'min_pressure')
+
+    def get_node_flow_rate(self, name):
+        return self.retrieve(name, None, 'flow_rate')
+
+    def get_node_min_flow_rate(self, name):
+        return self.retrieve(name, None, 'min_flow_rate')
+
+    def get_node_viscosity(self, name):
+        return self.retrieve(name, None, 'viscosity')
+
+    def get_node_min_viscosity(self, name):
+        return self.retrieve(name, None, 'min_viscosity')
+
+    def get_node_density(self, name):
+        return self.retrieve(name, None, 'density')
+
+    def get_node_min_density(self, name):
+        return self.retrieve(name, None, 'min_density')
+
+    def get_node_x(self, name):
+        return self.retrieve(name, None, 'x')
+
+    def get_node_y(self, name):
+        return self.retrieve(name, None, 'y')
+
+    def get_node_min_x(self, name):
+        return self.retrieve(name, None, 'min_x')
+
+    def get_node_min_y(self, name):
+        return self.retrieve(name, None, 'min_y')
 
     def translate_chip(self, name):
         """Create SMT expressions for bounding the nodes to be within constraints
@@ -319,8 +361,8 @@ class Schematic():
         named_node = self.dg.nodes[name]
         self.exprs.append(named_node['x'] >= self.dim[0])
         self.exprs.append(named_node['y'] >= self.dim[1])
-        self.exprs.append(named_node['x'] >= self.dim[2])
-        self.exprs.append(named_node['y'] >= self.dim[3])
+        self.exprs.append(named_node['x'] <= self.dim[2])
+        self.exprs.append(named_node['y'] <= self.dim[3])
         return
 
     def translate_node(self, name):
@@ -344,7 +386,10 @@ class Schematic():
         if len(self.dg.pred[name]) == 1:
             self.exprs.append(named_node['pressure'] == output_pressures[0])
         elif len(self.dg.pred[name]) > 1:
-            self.exprs.append(named_node['pressure'] == Plus(output_pressures))
+            output_pressure_formulas = [a+b for a, b in
+                                        zip(output_pressures,
+                                            output_pressures[1:])]
+            self.exprs.append(named_node['flow_rate'] == logical_and(*output_pressure_formulas))
 
         # If parameters are provided by the user, then set the
         # their Variable equal to that value, otherwise make it greater than 0
@@ -362,8 +407,8 @@ class Schematic():
             self.exprs.append(named_node['x'] == named_node['min_x'])
             self.exprs.append(named_node['y'] == named_node['min_y'])
         else:
-            self.exprs.append(named_node['x'] == 0)
-            self.exprs.append(named_node['y'] == 0)
+            self.exprs.append(named_node['x'] >= 0)
+            self.exprs.append(named_node['y'] >= 0)
 
         if named_node['min_flow_rate']:
             self.exprs.append(named_node['flow_rate'] == named_node['min_flow_rate'])
@@ -445,7 +490,10 @@ class Schematic():
             if len(total_flow_in) == 1:
                 self.exprs.append(named_node['flow_rate'] == total_flow_in[0])
             else:
-                self.exprs.append((named_node['flow_rate'] == Plus(total_flow_in)))
+                total_flow_in_formulas = [a+b for a, b in
+                                          zip(total_flow_in, total_flow_in[1:])]
+                self.exprs.append(named_node['flow_rate'] ==
+                                  logical_and(*total_flow_in_formulas))
         return
 
     # TODO: Refactor to use different formulas depending on the kind of the channel
@@ -595,7 +643,7 @@ class Schematic():
         #                           ))
 
         # Viscosity in continous phase equals viscosity at output
-        self.exprs.append(Equals(continuous_node['viscosity'], output_node['viscosity']))
+        self.exprs.append(continuous_node['viscosity'] == output_node['viscosity'])
 
         # Flow rate into the t-junction equals the flow rate out
         self.exprs.append(continuous_channel['flow_rate'] +
@@ -649,6 +697,8 @@ class Schematic():
         # Call translate on output
         self.translation_strats[output_node['kind']](output_node_name)
 
+    # NOTE: Should these methods just append to exprs instead of returning the
+    #       expression?
     def channels_in_straight_line(self, node1_name, node2_name, node3_name):
         """Create expressions to assert that 2 channels are in a straight
         line with each other by asserting that a triangle between the 2
@@ -661,33 +711,23 @@ class Schematic():
         """
         # Check that these nodes connect
         try:
-            self.dg[node1_name][node2_name]
-            self.dg[node2_name][node3_name]
+            self.dg.edges((node1_name, node2_name))
+            self.dg.edges((node2_name, node3_name))
         except TypeError as e:
             raise TypeError("Tried asserting that 2 channels are in a straight\
                 line but they aren't connected")
-
-        node1_named = self.dg.nodes[node1_name]
-        node2_named = self.dg.nodes[node2_name]
-        node3_named = self.dg.nodes[node3_name]
 
         # Constrain that continuous and output ports are in a straight line by
         # setting the area of the triangle formed between those two points and
         # the center of the t-junct to be 0
         # Formula for area of a triangle given 3 points
-        # x_i (y_p − y_j ) + x_p (y_j − y_i ) + x_j (y_i − y_p ) / 2
-        return Equals(Real(0),
-                      Div(Plus(Times(node1_named['x'],
-                                     Minus(node3_named['y'], node2_named['y'])
-                                     ),
-                               Plus(Times(node3_named['x'],
-                                          Minus(node2_named['y'], node1_named['y'])
-                                          ),
-                                    Times(node2_named['x'],
-                                          Minus(node1_named['y'], node3_named['y'])
-                                          ))),
-                          Real(2)
-                          ))
+        # x_i (y_p - y_j) + x_p (y_j - y_i) + x_j (y_i - y_p) / 2
+        return (((self.get_node_x(node1_name)) *
+                (self.get_node_y(node3_name) - self.get_node_y(node2_name))
+                + self.get_node_x(node3_name) *
+                (self.get_node_y(node2_name) - self.get_node_y(node1_name))
+                + self.get_node_x(node2_name) *
+                (self.get_node_y(node1_name) - self.get_node_y(node3_name))) / 2 == 0)
 
     # TODO: In Manifold this has the option for worst case analysis, which is
     #       used to adjust the constraints in the case when there is no
@@ -701,15 +741,10 @@ class Schematic():
         :param str channel_name: Name of the channel
         :returns: SMT expression of equality between delta(P) and Q*R
         """
-        channel = self.dg.edges[channel_name]
-        port_from_name = channel['port_from']
-        port_from = self.dg.nodes[port_from_name]
-        port_to_name = channel['port_to']
-        port_to = self.dg.nodes[port_to_name]
-        p1 = port_from['pressure']
-        p2 = port_to['pressure']
-        Q = channel['flow_rate']
-        R = channel['resistance']
+        p1 = self.get_node_pressure(self.get_channel_port_from(channel_name))
+        p2 = self.get_node_pressure(self.get_channel_port_to(channel_name))
+        Q = self.get_channel_flow_rate(channel_name)
+        R = self.get_channel_shape(channel_name)
         return ((p1 - p2) == (Q * R))
 
     def channel_output_pressure(self, channel_name):
@@ -721,12 +756,10 @@ class Schematic():
         :returns: SMT expression of the difference between pressure
             into the channel and R*Q
         """
-        channel = self.dg.edges[channel_name]
         P_in = self.dg.nodes[channel_name[0]]['pressure']
-        R = channel['resistance']
-        Q = channel['flow_rate']
-        return Minus(P_in,
-                     Times(R, Q))
+        R = self.get_channel_resistance(channel_name)
+        Q = self.get_channel_flow_rate(channel_name)
+        return (P_in - (R * Q))
 
     def calculate_channel_resistance(self, channel_name):
         """Calculate the droplet resistance in a channel using:
@@ -740,21 +773,12 @@ class Schematic():
             that channel height is less than width, second
             is the above expression in SMT form
         """
-        channel = self.dg.edges[channel_name]
-        w = channel['width']
-        h = channel['height']
-        mu = channel['viscosity']
-        chL = channel['length']
-        return (LT(h, w),
-                Div(Times(Real(12),
-                          Times(mu, chL)
-                          ),
-                    Times(w,
-                          Times(Pow(h, Real(3)),
-                                Minus(Real(1),
-                                      Times(Real(0.63),
-                                            Div(h, w)
-                                            ))))))
+        w = self.get_channel_width(channel_name)
+        h = self.get_channel_height(channel_name)
+        mu = self.get_channel_viscosity(channel_name)
+        chL = self.get_channel_length(channel_name)
+        return ((h < w),
+                ((12 * (mu * chL)) / (w * ((h ** 3) * (1 - (0.63 * (h / w)))))))
 
     def pythagorean_length(self, channel_name):
         """Use Pythagorean theorem to assert that the channel length
@@ -765,16 +789,13 @@ class Schematic():
         :returns: SMT expression of the equality of the side lengths squared
             and the channel length squared
         """
-        channel = self.dg.edges[channel_name]
-        port_from = self.dg.nodes[channel_name[0]]
-        port_to = self.dg.nodes[channel_name[1]]
-        side_a = Minus(port_from['x'], port_to['x'])
-        side_b = Minus(port_from['y'], port_to['y'])
-        a_squared = Pow(side_a, Real(2))
-        b_squared = Pow(side_b, Real(2))
-        a_squared_plus_b_squared = Plus(a_squared, b_squared)
-        c_squared = Pow(channel['length'], Real(2))
-        return Equals(a_squared_plus_b_squared, c_squared)
+        side_a = self.get_node_x(self.get_channel_port_from(channel_name)) -\
+            self.get_node_x(self.get_channel_port_to(channel_name))
+        side_b = self.get_node_y(self.get_channel_port_from(channel_name)) -\
+            self.get_node_y(self.get_channel_port_to(channel_name))
+        a_squared_plus_b_squared = side_a ** 2 + side_b ** 2
+        c_squared = (self.get_channel_length(channel_name) ** 2)
+        return (a_squared_plus_b_squared == c_squared)
 
     def cosine_law_crit_angle(self, node1_name, node2_name, node3_name):
         """Use cosine law to find cos^2(theta) between three points
@@ -786,28 +807,16 @@ class Schematic():
         :param node3: Outside node
         :returns: cos^2 as calculated using cosine law (a_dot_b^2/a^2*b^2)
         """
-        node1 = self.dg.nodes[node1_name]
-        node2 = self.dg.nodes[node2_name]
-        node3 = self.dg.nodes[node3_name]
         # Lengths of channels
-        aX = Minus(node1['x'], node2['x'])
-        aY = Minus(node1['y'], node2['y'])
-        bX = Minus(node3['x'], node2['x'])
-        bY = Minus(node3['y'], node2['y'])
+        aX = (self.get_node_x(node1_name) - self.get_node_x(node2_name))
+        aY = (self.get_node_y(node1_name) - self.get_node_y(node2_name))
+        bX = (self.get_node_x(node3_name) - self.get_node_x(node2_name))
+        bY = (self.get_node_y(node3_name) - self.get_node_y(node2_name))
         # Dot products between each channel
-        a_dot_b_squared = Pow(Plus(Times(aX, bX),
-                                   Times(aY, bY)
-                                   ),
-                              Real(2)
-                              )
-        a_squared_b_squared = Times(Plus(Times(aX, aX),
-                                         Times(aY, aY)
-                                         ),
-                                    Plus(Times(bX, bX),
-                                         Times(bY, bY)
-                                         ),
-                                    )
-        return Div(a_dot_b_squared, a_squared_b_squared)
+        a_dot_b_squared = (((aX * bX) + (aY * bY)) ** 2)
+        a_squared_b_squared = ((aX * aX) + (aY * aY)) * ((bX * bX) + (bY * bY))
+
+        return (a_dot_b_squared / a_squared_b_squared)
 
     def calculate_droplet_volume(self, h, w, wIn, epsilon, qD, qC):
         """From paper DOI:10.1039/c002625e.
@@ -822,52 +831,21 @@ class Schematic():
         :param Variable qD: Flow rate in dispersed_channel
         :param Variable qC: Flow rate in continuous_channel
         """
-        q_gutter = Real(0.1)
+        q_gutter = 0.1
         # normalizedVFill = 3pi/8 - (pi/2)(1 - pi/4)(h/w)
-        v_fill_simple = Minus(
-                Times(Real((3, 8)), Real(math.pi)),
-                Times(Times(
-                            Div(Real(math.pi), Real(2)),
-                            Minus(Real(1),
-                                  Div(Real(math.pi), Real(4)))),
-                      Div(h, w)))
+        v_fill_simple = (3 * (math.pi) / 8) - (math.pi / 2) * (1 - math.pi / 4) * (h / w)
 
-        hw_parallel = Div(Times(h, w), Plus(h, w))
+        hw_parallel = ((h * w) / (h + w))
 
         # r_pinch = w+((wIn-(hw_parallel - eps))+sqrt(2*((wIn-hw_parallel)*(w-hw_parallel))))
-        r_pinch = Plus(w,
-                       Plus(Minus(
-                                  wIn,
-                                  Minus(hw_parallel, epsilon)),
-                            Pow(Times(
-                                      Real(2),
-                                      Times(Minus(wIn, hw_parallel),
-                                            Minus(w, hw_parallel)
-                                            )),
-                                Real(0.5))))
+        r_pinch = w + ((wIn - (hw_parallel - epsilon)) +
+                       (2 * ((wIn - hw_parallel) * (w - hw_parallel))) ** 0.5)
         r_fill = w
-        alpha = Times(Minus(
-                            Real(1),
-                            Div(Real(math.pi), Real(4))
-                            ),
-                      Times(Pow(
-                                Minus(Real(1), q_gutter),
-                                Real(-1)
-                                ),
-                            Plus(Minus(
-                                       Pow(Div(r_pinch, w), Real(2)),
-                                       Pow(Div(r_fill, w), Real(2))
-                                       ),
-                                 Times(Div(Real(math.pi), Real(4)),
-                                       Times(Minus(
-                                                   Div(r_pinch, w),
-                                                   Div(r_fill, w)
-                                                   ),
-                                             Div(h, w)
-                                             )))))
+        alpha = (1 - (math.pi / 4)) * (((1 - q_gutter) ** -1) *
+                     ((((r_pinch / w) ** 2) - ((r_fill / w) ** 2)) +
+                     ((math.pi / 4) * (r_pinch / w) - (r_fill / w)) * (h / w)))
 
-        return Times(Times(h, Times(w, w)),
-                     Plus(v_fill_simple, Times(alpha, Div(qD, qC))))
+        return ((h * (w * w)) * (v_fill_simple + (alpha * (qD / qC))))
 
     def calculate_port_flow_rate(self, port_name):
         """Calculate the flow rate into a port based on the cross sectional
@@ -881,20 +859,20 @@ class Schematic():
                   connected channels
         """
         areas = []
-        port_named = self.dg.nodes[port_name]
+        port_pressure = self.get_node_pressure(port_name)
+        port_density = self.get_node_density(port_name)
+        # Calculate cross sectional area of all channels flowing into this port
         for port_out in self.dg.succ[port_name]:
-            areas.append(Times(self.dg[port_name][port_out]['length'],
-                               self.dg[port_name][port_out]['width']
-                               ))
-        total_area = Plus(areas)
-        return Times(total_area,
-                     Pow(Div(Times(Real(2),
-                                   port_named['pressure']
-                                   ),
-                             port_named['density']
-                             ),
-                         Real(0.5)
-                         ))
+            areas.append(self.get_channel_length((port_name, port_out)) *
+                         self.get_channel_width((port_name, port_out))
+                         )
+        # Add together all these areas if multiple exist
+        if len(areas) == 1:
+            total_area = areas[0]
+        else:
+            areas = [a+b for a, b in zip(areas, areas[1:])]
+            total_area = logical_and(*areas)
+        return (total_area * (((2 * port_pressure) / port_density) ** 0.5))
 
     def translate_schematic(self):
         """Validates that each node has the correct input and output
@@ -939,15 +917,15 @@ class Schematic():
                           printed
         :returns: pySMT model showing the values for each of the parameters
         """
-        formula = logical_and(self.exprs)
+        formula = logical_and(*self.exprs)
         # Prints the generated formula in full, remove serialize for shortened
         if _show:
-            pprint(formula.serialize())
             #  nx.draw(self.dg)
             #  plt.show()
+            print(formula)
         # Return None if not solvable, returns a dict-like structure giving the
         # range of values for each Variable
-        model = CheckSatisfiability(formula, solver_name='z3', logic=QF_NRA)
+        model = CheckSatisfiability(formula, 1)
         if model:
             return model
         else:
@@ -959,7 +937,7 @@ class Schematic():
 
         :param bool show: If true then the full SMT formula that was created is
                           printed
-        :returns: pySMT model showing the values for each of the parameters
+        :returns: dReal model showing the values for each of the parameters
         """
         self.translate_schematic()
         return self.invoke_backend(show)

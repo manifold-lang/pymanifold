@@ -1,6 +1,6 @@
-import sys
-from pprint import pprint
-pprint(sys.path)
+#  import sys
+#  from pprint import pprint
+#  pprint(sys.path)
 from build.lib.data.dreal.symbolic import Variable, logical_and, sin, cos
 from build.lib.data.dreal.api import CheckSatisfiability, Minimize
 
