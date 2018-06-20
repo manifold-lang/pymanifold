@@ -125,53 +125,56 @@ class Schematic():
             self.dg.edges[port_from, port_to][key] = attr
         return
 
-    def retrieve(port_in, port_out, attr):
-      if(port_out == "None"):
-        return self.dg.edges[port_in][attr]
+    def retrieve(port_in, attr, port_out=None):
+      if not port_out:
+        if isinstance(port_in, list):
+          return self.dg.edges[port_in][attr]
+        else:
+          return self.dg.nodes[port_in][attr]
       else:
-        return self.dg[port_in][port_out][attr]
+        return self.dg.edges[(port_in, port_out)][attr]
 
-    def get_channel_shape(name, port_out="None"):
-        return retrieve(name, port_out, 'shape')
+    def get_channel_shape(name, port_out=None):
+        return retrieve(name,'shape', port_out)
 
-    def get_channel_length(name, port_out="None"):
-        return retrieve(name, port_out, 'length')
+    def get_channel_length(name, port_out=None):
+        return retrieve(name, 'length', port_out)
 
-    def get_channel_min_length(name, port_out="None"):
-        return retrieve(name, port_out, 'min_length')
+    def get_channel_min_length(name, port_out=None):
+        return retrieve(name, 'min_length', port_out)
 
-    def get_channel_width(name, port_out="None"):
-        return retrieve(name, port_out, 'width')
+    def get_channel_width(name, port_out=None):
+        return retrieve(name, 'width', port_out)
 
-    def get_channel_min_width(name, port_out="None"):
-        return retrieve(name, port_out, 'min_width')
+    def get_channel_min_width(name, port_out=None):
+        return retrieve(name, 'min_width', port_out)
 
-    def get_channel_height(name, port_out="None"):
-        return retrieve(name, port_out, 'height')
+    def get_channel_height(name, port_out=None):
+        return retrieve(name, 'height', port_out)
 
-    def get_channel_min_height(name, port_out="None"):
-        return retrieve(name, port_out, 'min_height')
+    def get_channel_min_height(name, port_out=None):
+        return retrieve(name, 'min_height', port_out)
 
-    def get_channel_flow_rate(name, port_out="None"):
-        return retrieve(name, port_out, 'flow_rate')
+    def get_channel_flow_rate(name, port_out=None):
+        return retrieve(name, 'flow_rate', port_out)
 
-    def get_channel_droplet_volume(name, port_out="None"):
-        return retrieve(name, port_out, 'droplet_volume')
+    def get_channel_droplet_volume(name, port_out=None):
+        return retrieve(name, 'droplet_volume', port_out)
 
-    def get_channel_viscosity(name, port_out="None"):
-        return retrieve(name, port_out, 'viscosity')
+    def get_channel_viscosity(name, port_out=None):
+        return retrieve(name, 'viscosity', port_out)
 
-    def get_channel_resistance(name, port_out="None"):
-        return retrieve(name, port_out, 'resistance')
+    def get_channel_resistance(name, port_out=None):
+        return retrieve(name, 'resistance', port_out)
 
-    def get_channel_phase(name, port_out="None"):
-        return retrieve(name, port_out, 'phase')
+    def get_channel_phase(name, port_out=None):
+        return retrieve(name, 'phase', port_out)
 
-    def get_channel_port_from(name, port_out="None"):
-        return retrieve(name, port_out, 'port_from')
+    def get_channel_port_from(name, port_out=None):
+        return retrieve(name, 'port_from', port_out)
 
-    def get_channel_port_to(name, port_out="None"):
-        return retrieve(name, port_out, 'port_to')
+    def get_channel_port_to(name, port_out=None):
+        return retrieve(name, 'port_to', port_out)
 
     def port(self,
              name,
