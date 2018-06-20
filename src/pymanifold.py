@@ -12,7 +12,7 @@ import Constants
 class Fluid():
     
   def __init__(self, fluid):
-    self.min_density = Constants.FluidProperties().getDesnity(fluid)
+    self.min_density = Constants.FluidProperties().getDensity(fluid)
     self.min_resistivity = Constants.FluidProperties().getResistivity(fluid)
     self.min_viscosity = Constants.FluidProperties().getViscosity(fluid)
     self.min_pressure = False
@@ -151,7 +151,7 @@ class Schematic():
              min_flow_rate=False,
              x=False,
              y=False,
-             fluidName=False):
+             fluid_name='default'):
         """Create new port where fluids can enter or exit the circuit, any
         optional tag left empty will be converted to a variable for the SMT
         solver to solve for a give a value, units in brackets
@@ -177,7 +177,7 @@ class Schematic():
             raise ValueError("kind must be %s" % self.translation_strats.keys())
 
         # Initialize fluid properties
-        fluid_properties = Fluid(fluidName)
+        fluid_properties = Fluid(fluid_name)
 
         # Ports are stored with nodes because ports are just a specific type of
         # node that has a constant flow rate
