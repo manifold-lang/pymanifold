@@ -7,6 +7,25 @@ from pysmt.shortcuts import Minus, GE, GT, LE, LT, And, get_model, is_sat
 from pysmt.typing import REAL
 from pysmt.logics import QF_NRA
 
+import Constants
+
+class Fluid():
+    
+  def __init__(self, fluid):
+    self.min_density = Constants.FluidProperties().getDensity(fluid)
+    self.min_resistivity = Constants.FluidProperties().getResistivity(fluid)
+    self.min_viscosity = Constants.FluidProperties().getViscosity(fluid)
+    self.min_pressure = False
+
+  def updateFluidProperties(self, min_density=False, min_viscosity=False, min_pressure=False, min_resistivity=False):
+    self.min_density = min_density
+    self.min_resistivity = min_resistivity
+    self.min_viscosity = min_viscosity
+    self.min_pressure = min_pressure
+
+  def __repr__(self):
+    return repr((self.min_density, self.min_resistivity, self.min_viscosity, self.min_pressure))
+
 
 class Schematic():
     """Create new schematic which contains all of the connections and ports
@@ -132,8 +151,7 @@ class Schematic():
              min_flow_rate=False,
              x=False,
              y=False,
-             density=False,
-             min_viscosity=False):
+             fluid_name='default'):
         """Create new port where fluids can enter or exit the circuit, any
         optional tag left empty will be converted to a variable for the SMT
         solver to solve for a give a value, units in brackets
@@ -158,18 +176,21 @@ class Schematic():
         if kind.lower() not in self.translation_strats.keys():
             raise ValueError("kind must be %s" % self.translation_strats.keys())
 
+        # Initialize fluid properties
+        fluid_properties = Fluid(fluid_name)
+
         # Ports are stored with nodes because ports are just a specific type of
         # node that has a constant flow rate
         # only accept ports of the right kind (input or output)
         attributes = {'kind': kind.lower(),
                       'viscosity': Symbol(name+'_viscosity', REAL),
-                      'min_viscosity': min_viscosity,
+                      'min_viscosity': fluid_properties.min_viscosity,
                       'pressure': Symbol(name+'_pressure', REAL),
                       'min_pressure': min_pressure,
                       'flow_rate': Symbol(name+'_flow_rate', REAL),
                       'min_flow_rate': min_flow_rate,
                       'density': Symbol(name+'_density', REAL),
-                      'min_density': density,
+                      'min_density': fluid_properties.min_density,
                       'x': Symbol(name+'_X', REAL),
                       'y': Symbol(name+'_Y', REAL),
                       'min_x': x,
