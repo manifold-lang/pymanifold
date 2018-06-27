@@ -125,7 +125,7 @@ class Schematic():
             self.dg.edges[port_from, port_to][key] = attr
         return
 
-    def retrieve(port_in, attr, port_out):
+    def retrieve(self, port_in, attr, port_out):
       if not port_out:
         if isinstance(port_in, tuple):
           return self.dg.edges[port_in][attr]
@@ -134,8 +134,8 @@ class Schematic():
       else:
         return self.dg.edges[(port_in, port_out)][attr]
 
-    def get_channel_shape(self, port_in, port_out=None):
-        return self.retrieve(port_in,'shape', port_out)
+    def get_channel_kind(self, port_in, port_out=None):
+        return self.retrieve(port_in,'kind', port_out)
 
     def get_channel_length(self, port_in, port_out=None):
         return self.retrieve(port_in, 'length', port_out)
@@ -314,43 +314,43 @@ class Schematic():
                 self.dg.nodes[name][key] = attr
         return
 
-    def get_node_kind(name):
+    def get_node_kind(self, name):
         return self.dg.nodes[name]['kind']
 
-    def get_node_pressure(name):
+    def get_node_pressure(self, name):
         return self.dg.nodes[name]['pressure']
 
-    def get_node_min_pressure(name):
+    def get_node_min_pressure(self, name):
         return self.dg.nodes[name]['min_pressure']
 
-    def get_node_flow_rate(name):
+    def get_node_flow_rate(self, name):
         return self.dg.nodes[name]['flow_rate']
 
-    def get_node_min_flow_rate(name):
+    def get_node_min_flow_rate(self, name):
         return self.dg.nodes[name]['min_flow_rate']
 
-    def get_node_viscosity(name):
+    def get_node_viscosity(self, name):
         return self.dg.nodes[name]['viscosity']
 
-    def get_node_min_viscosity(name):
+    def get_node_min_viscosity(self, name):
         return self.dg.nodes[name]['min_viscosity']
 
-    def get_node_density(name):
+    def get_node_density(self, name):
         return self.dg.nodes[name]['density']
 
-    def get_node_min_density(name):
+    def get_node_min_density(self, name):
         return self.dg.nodes[name]['min_density']
 
-    def get_node_x(name):
+    def get_node_x(self, name):
         return self.dg.nodes[name]['x']
 
-    def get_node_y(name):
+    def get_node_y(self, name):
         return self.dg.nodes[name]['y']
 
-    def get_node_min_x(name):
+    def get_node_min_x(self, name):
         return self.dg.nodes[name]['min_x']
 
-    def get_node_min_y(name):
+    def get_node_min_y(self, name):
         return self.dg.nodes[name]['min_y']
         
     def translate_chip(self, name):
