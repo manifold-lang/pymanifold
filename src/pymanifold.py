@@ -1,6 +1,8 @@
 from pprint import pprint
 import math
+import json
 import networkx as nx
+from networkx.readwrite import json_graph
 #  import matplotlib.pyplot as plt  # include if you want to show graph
 from pysmt.shortcuts import Symbol, Plus, Times, Div, Pow, Equals, Real
 from pysmt.shortcuts import Minus, GE, GT, LE, LT, And, get_model, is_sat
@@ -971,3 +973,87 @@ class Schematic():
         """
         self.translate_schematic()
         return self.invoke_backend(show)
+
+    def to_json(self):
+        
+        """Converts designed schematic to a json file following Manifold IR grammar"""
+        json_out = json_graph.node_link_data(self.dg)
+        stuff = [str(i) for i in json_out['links']] 
+        edits = dict(self.solve())
+        edits1 = {str(key):str(value) for key, value in edits.items()}
+        fin_edits = {str(key):str(value) for key, value in edits.items()}
+		
+        for key, value in edits1.items():
+            if value[-1] == '?':
+                final_val1 = float(value[:-1])
+                fin_edits[key] = final_val1
+            if '/' in value:
+                s_list = value.split('/')
+                val_list = [float(i) for i in s_list]
+                final_val2 = val_list[0] / val_list[1]
+                fin_edits[key] = final_val2
+        
+        for key, value in fin_edits.items():
+            if type(value) == str:
+                fin_edits[key] = float(value)
+        pprint(fin_edits)
+
+        for sub in json_out['links']:
+            for key in sub:
+                if type(sub[key]) != bool and type(sub[key]) != int and type(sub[key]) != float:
+                    sub[key] = str(sub[key])
+		
+        for sub in json_out['nodes']:
+            for key in sub:
+                if type(sub[key]) != bool and type(sub[key]) != int and type(sub[key]) != float:
+                    sub[key] = str(sub[key])
+
+        for key, value in fin_edits.items():
+            for sub in json_out['links']:
+                for stuff in sub:
+                    if key == sub[stuff]:
+                        sub[stuff] = value
+            for sub in json_out['nodes']:
+                for stuff in sub:
+                    if key == sub[stuff]:
+                        sub[stuff] = value
+
+        pprint(json_out)
+
+        wow = {
+                "name": "Json Data",
+                "userDefinedTypes": {...},
+                "portTypes": { 
+                    "name": { 
+                        "signalType": "...", 
+                        "attributes": {...}
+		             },
+                 },
+                "nodeTypes": { 
+                    "name": { 
+                        "attributes": {...},
+                        "ports": {...}
+                     },
+                 },
+                "constraintTypes": {...},
+                "nodes": { 
+                    "name": { 
+                        "type": "...",
+                        "attributes": {...},
+                        "portAttrs": {...}
+                     },
+                 },
+                "connections": { 
+                    "name": { 
+                        "attributes": {...},
+                        "from": "...",
+                        "to": "..."
+                     },
+                 },
+                "constraints": {...}
+            }
+        pprint(wow)
+
+        path = "C:\\Users\\msacw\\AppData\\Local\\Programs\\Python\\Python36\\test.json"
+        with open(path, 'w') as outfile:
+            json.dump(json_out, outfile, separators=(',', ':'))
