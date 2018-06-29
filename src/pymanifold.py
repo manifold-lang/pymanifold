@@ -974,7 +974,7 @@ class Schematic():
         self.translate_schematic()
         return self.invoke_backend(show)
 
-    def to_json(self):
+    def to_json(self, path):
         
         """Converts designed schematic to a json file following Manifold IR grammar"""
         json_out = json_graph.node_link_data(self.dg)
@@ -1054,6 +1054,5 @@ class Schematic():
             }
         pprint(wow)
 
-        path = "C:\\Users\\msacw\\AppData\\Local\\Programs\\Python\\Python36\\test.json"
         with open(path, 'w') as outfile:
             json.dump(json_out, outfile, separators=(',', ':'))
