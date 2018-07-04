@@ -7,5 +7,9 @@ sch.port('out', 'output')
 sch.channel('in', 'out', min_length=1, min_width=0.9)
 
 sch.node('abc', x=6, y=7, kind='t-junction')
-
-print(sch.get_channel_kind('in', 'out'))
+#sch.translate_node('abc')
+#sch.translate_channel(('in', 'out'))
+#sch.translate_input('in')
+sch.translate_output('out')
+print(sch.exprs)
+#print(sch.get_channel_kind('in', 'out'))
