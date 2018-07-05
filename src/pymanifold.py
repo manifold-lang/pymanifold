@@ -153,9 +153,6 @@ class Schematic():
         else:
             return self.dg.edges[(port_in, port_out)][attr]
 
-    def get_channel(self, port_in, port_out=None):
-        return self.dg.edges[port_in]
-
     def get_channel_kind(self, port_in, port_out=None):
         return self.retrieve(port_in,'kind', port_out)
 
@@ -337,9 +334,6 @@ class Schematic():
         for key, attr in attributes.items():
                 self.dg.nodes[name][key] = attr
         return
-
-    def get_node(self, name):
-        return self.dg.nodes[name]
 
     def get_node_kind(self, name):
         return self.dg.nodes[name]['kind']
