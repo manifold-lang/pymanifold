@@ -996,7 +996,6 @@ class Schematic():
         for key, value in fin_edits.items():
             if type(value) == str:
                 fin_edits[key] = float(value)
-        pprint(fin_edits)
 
         for sub in json_out['links']:
             for key in sub:
@@ -1020,39 +1019,82 @@ class Schematic():
 
         pprint(json_out)
 
-        wow = {
+        manifold = {
                 "name": "Json Data",
-                "userDefinedTypes": {...},
-                "portTypes": { 
-                    "name": { 
-                        "signalType": "...", 
-                        "attributes": {...}
-		             },
-                 },
-                "nodeTypes": { 
-                    "name": { 
-                        "attributes": {...},
-                        "ports": {...}
-                     },
-                 },
-                "constraintTypes": {...},
-                "nodes": { 
-                    "name": { 
-                        "type": "...",
-                        "attributes": {...},
-                        "portAttrs": {...}
-                     },
-                 },
-                "connections": { 
-                    "name": { 
-                        "attributes": {...},
-                        "from": "...",
-                        "to": "..."
-                     },
-                 },
-                "constraints": {...}
+                "userDefinedTypes": {},
+                "portTypes": {},
+                "nodeTypes": {},
+                "constraintTypes": {},
+                "nodes": {},
+                "connections": {},
+                "constraints": {}
             }
-        pprint(wow)
 
+        for key, value in json_out.items():
+            if type(value) != list:
+                manifold['constraints'][key] = value
+
+        lcount = 0
+        for sub in json_out['links']:
+            for key, value in sub.items():
+                if lcount == 0:
+                    lfirst = key
+                if key == lfirst:
+                    lcount = lcount + 1
+                    chan = "ch" + str(lcount)
+                    manifold['connections'][chan] = {"attributes":{}, "from":"", "to":""}
+                if key != 'port_from' and key != 'port_to':
+                    manifold['connections'][chan]['attributes'][key] = value
+                if key == 'port_from':
+                    manifold['connections'][chan]['from'] = value
+                if key == 'port_to':
+                    manifold['connections'][chan]['to'] = value
+
+        ncount = 0
+        for sub in json_out['nodes']:
+            for key, value in sub.items():
+                if ncount == 0:
+                    nfirst = key
+                if key == nfirst:
+                    ncount = ncount + 1
+                    nod = "node" + str(ncount)
+                    manifold['nodes'][nod] = {"type":"", "attributes":{}, "portAttrs": {}}
+                if key == 'kind':
+                    manifold['nodes'][nod]['type'] = value
+                if key != 'kind' and key != 'id':
+                    manifold['nodes'][nod]['attributes'][key] = value
+                if key == 'id':
+                    manifold['nodes'][nod]['portAttrs'] = value
+
+        ptcount = 0
+        for sub in json_out['links']:
+            for key, value in sub.items():
+                if ptcount == 0:
+                    ptfirst = key
+                if key == ptfirst:
+                    ptcount = ptcount + 1
+                    portT = "pT" + str(ptcount)
+                    manifold['portTypes'][portT] = {"signalType":"", "attributes":{}}
+                if key == 'phase':
+                    manifold['portTypes'][portT]['signalType'] = value
+                if key != 'phase':
+                    manifold['portTypes'][portT]['attributes'][key] = value
+
+        ntcount = 0
+        for sub in json_out['nodes']:
+            for key, value in sub.items():
+                if ntcount == 0:
+                    ntfirst = key
+                if key == ntfirst:
+                    ntcount = ntcount + 1
+                    nodT = "nT" + str(ntcount)
+                    manifold['nodeTypes'][nodT] = {"attributes":{}, "ports": {}}
+                if key == 'id':
+                    manifold['nodeTypes'][nodT]['ports'] = value
+                if key != 'id':
+                    manifold['nodeTypes'][nodT]['attributes'][key] = value
+
+        pprint(manifold)
+	
         with open(path, 'w') as outfile:
-            json.dump(json_out, outfile, separators=(',', ':'))
+            json.dump(manifold, outfile, separators=(',', ':'))
