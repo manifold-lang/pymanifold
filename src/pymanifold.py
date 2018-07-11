@@ -1,6 +1,7 @@
 from pprint import pprint
 import math
 import json
+import os
 import networkx as nx
 from networkx.readwrite import json_graph
 #  import matplotlib.pyplot as plt  # include if you want to show graph
@@ -974,7 +975,7 @@ class Schematic():
         self.translate_schematic()
         return self.invoke_backend(show)
 
-    def to_json(self, path):
+    def to_json(self, path = os.getcwd() + 'test.json'):
         
         """Converts designed schematic to a json file following Manifold IR grammar"""
         json_out = json_graph.node_link_data(self.dg)
