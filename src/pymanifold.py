@@ -1,6 +1,9 @@
 from pprint import pprint
 import math
+import json
+import os
 import networkx as nx
+from networkx.readwrite import json_graph
 #  import matplotlib.pyplot as plt  # include if you want to show graph
 from pysmt.shortcuts import Symbol, Plus, Times, Div, Pow, Equals, Real
 from pysmt.shortcuts import Minus, GE, GT, LE, LT, And, get_model, is_sat
@@ -1138,3 +1141,128 @@ class Schematic():
         """
         self.translate_schematic()
         return self.invoke_backend(show)
+
+    def to_json(self, path = os.getcwd() + 'test.json'):
+        
+        """Converts designed schematic to a json file following Manifold IR grammar"""
+        json_out = json_graph.node_link_data(self.dg)
+        stuff = [str(i) for i in json_out['links']] 
+        edits = dict(self.solve())
+        edits1 = {str(key):str(value) for key, value in edits.items()}
+        fin_edits = {str(key):str(value) for key, value in edits.items()}
+		
+        for key, value in edits1.items():
+            if value[-1] == '?':
+                final_val1 = float(value[:-1])
+                fin_edits[key] = final_val1
+            if '/' in value:
+                s_list = value.split('/')
+                val_list = [float(i) for i in s_list]
+                final_val2 = val_list[0] / val_list[1]
+                fin_edits[key] = final_val2
+        
+        for key, value in fin_edits.items():
+            if type(value) == str:
+                fin_edits[key] = float(value)
+
+        for sub in json_out['links']:
+            for key in sub:
+                if type(sub[key]) != bool and type(sub[key]) != int and type(sub[key]) != float:
+                    sub[key] = str(sub[key])
+		
+        for sub in json_out['nodes']:
+            for key in sub:
+                if type(sub[key]) != bool and type(sub[key]) != int and type(sub[key]) != float:
+                    sub[key] = str(sub[key])
+
+        for key, value in fin_edits.items():
+            for sub in json_out['links']:
+                for stuff in sub:
+                    if key == sub[stuff]:
+                        sub[stuff] = value
+            for sub in json_out['nodes']:
+                for stuff in sub:
+                    if key == sub[stuff]:
+                        sub[stuff] = value
+
+        pprint(json_out)
+
+        manifold = {
+                "name": "Json Data",
+                "userDefinedTypes": {},
+                "portTypes": {},
+                "nodeTypes": {},
+                "constraintTypes": {},
+                "nodes": {},
+                "connections": {},
+                "constraints": {}
+            }
+
+        for key, value in json_out.items():
+            if type(value) != list:
+                manifold['constraints'][key] = value
+
+        lcount = 0
+        for sub in json_out['links']:
+            for key, value in sub.items():
+                if lcount == 0:
+                    lfirst = key
+                if key == lfirst:
+                    lcount = lcount + 1
+                    chan = "ch" + str(lcount)
+                    manifold['connections'][chan] = {"attributes":{}, "from":"", "to":""}
+                if key != 'port_from' and key != 'port_to':
+                    manifold['connections'][chan]['attributes'][key] = value
+                if key == 'port_from':
+                    manifold['connections'][chan]['from'] = value
+                if key == 'port_to':
+                    manifold['connections'][chan]['to'] = value
+
+        ncount = 0
+        for sub in json_out['nodes']:
+            for key, value in sub.items():
+                if ncount == 0:
+                    nfirst = key
+                if key == nfirst:
+                    ncount = ncount + 1
+                    nod = "node" + str(ncount)
+                    manifold['nodes'][nod] = {"type":"", "attributes":{}, "portAttrs": {}}
+                if key == 'kind':
+                    manifold['nodes'][nod]['type'] = value
+                if key != 'kind' and key != 'id':
+                    manifold['nodes'][nod]['attributes'][key] = value
+                if key == 'id':
+                    manifold['nodes'][nod]['portAttrs'] = value
+
+        ptcount = 0
+        for sub in json_out['links']:
+            for key, value in sub.items():
+                if ptcount == 0:
+                    ptfirst = key
+                if key == ptfirst:
+                    ptcount = ptcount + 1
+                    portT = "pT" + str(ptcount)
+                    manifold['portTypes'][portT] = {"signalType":"", "attributes":{}}
+                if key == 'phase':
+                    manifold['portTypes'][portT]['signalType'] = value
+                if key != 'phase':
+                    manifold['portTypes'][portT]['attributes'][key] = value
+
+        ntcount = 0
+        for sub in json_out['nodes']:
+            for key, value in sub.items():
+                if ntcount == 0:
+                    ntfirst = key
+                if key == ntfirst:
+                    ntcount = ntcount + 1
+                    nodT = "nT" + str(ntcount)
+                    manifold['nodeTypes'][nodT] = {"attributes":{}, "ports": {}}
+                if key == 'id':
+                    manifold['nodeTypes'][nodT]['ports'] = value
+                if key != 'id':
+                    manifold['nodeTypes'][nodT]['attributes'][key] = value
+
+        pprint(manifold)
+	
+        with open(path, 'w') as outfile:
+            json.dump(manifold, outfile, separators=(',', ':'))
