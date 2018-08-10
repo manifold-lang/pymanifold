@@ -20,76 +20,19 @@ that the circuit will remain functional
 These instructions will get you a copy of the project up and running on your local
 machine for development and testing purposes.
 
-### Prerequisites
-
-This library requires installaion of [pysmt](https://github.com/pysmt/pysmt), an SMT
-solver library for python used to determine if the designed microfluidic circuit will
-work and if so within what range of parameters.
-
-Once this is installed (remember to call ``` pysmt-install --z3 ``` to install the
-Z3 SMT solver within pysmt and addit to you PYTHONPATH environment variable my calling
-``` pysmt-install --env ``` and running that command. This installs the Z3 solver my Microsoft
-to use to solve the SMT2 equations this.
-
 ### Installing
 
-Currently this is not on pip so to use it clone the repository using ```
-git clone https://github.com/jsreid13/pymanifold.git ``` and put the script src/pymanifold.py
-within your python3 site packages (C:\\python35\Lib\site-packages on Windows, 
-/usr/local/lib/python3.5/dist-packages on Linux).
-
-## Usage
-
-# pymanifold
-Python implementation of the Manifold microfluidic simulation language
-
-This library allows you to design a microfluidic circuit as a schematic consisting of:
-
-* **Nodes** - consist of elementary devices such as logic gates or fluid input channels
-* **Connections** - connect two nodes together
-* **Ports** - a type of node that allows for the input or output of fluids
-* **Constraints** - describe design rules or goals that are too complex to be described
-in terms of the other three primitives
-
-Once the circuit has been designed you can call solve on the schematic which will use
-a Satisfiability Modulo Theory (SMT) solver to determine if the given design and
-parameters has a solution (meaning that the circuit will work) and if so, provide
-the range of parameters (dimensions of the connections, flow rates, pressures, etc.)
-that the circuit will remain functional
-
-## Getting Started
-
-These instructions will get you a copy of the project up and running on your local
-machine for development and testing purposes.
-
-### Prerequisites
-
-This library requires installaion of [pysmt](https://github.com/pysmt/pysmt), an SMT
-solver library for python used to determine if the designed microfluidic circuit will
-work and if so within what range of parameters.
-
-Once this is installed (remember to call ``` pysmt-install --z3 ``` to install the
-Z3 SMT solver within pysmt and addit to you PYTHONPATH environment variable my calling
-``` pysmt-install --env ``` and running that command. This installs the Z3 solver my Microsoft
-to use to solve the SMT2 equations this.
-
-### Installing
-
-Currently this is not on pip so to use it clone the repository using ```
-git clone https://github.com/jsreid13/pymanifold.git ``` and put the script src/pymanifold.py
-within your python3 site packages (C:\\python35\Lib\site-packages on Windows, 
-/usr/local/lib/python3.5/dist-packages on Linux).
-
-## Usage
-
+This can be installed within Python 3 using ` pip install --user pymanifold `
+However this will require building dReal4 from source and OMPython from [GitHub](https://github.com/OpenModelica/OMPython) and [OpenModelica](https://openmodelica.org/), alternatively we provide a Docker image which contains all of these libraries baked in.
 Build the docker image using in the base directory of this repo:
-```
-docker build -t pymanifold .
-```
-And run the project within Docker using:
-```
-docker run -e "PYTHONPATH=/dreal4/opt/dreal/4.18.07.1/lib/python2.7/site-packages" -it --rm -v $(pwd):/tmp -w /tmp  pymanifold python3 src/pymanifold.py
-```
+` docker build -t pymanifold . `
+or clone using ` docker pull jsreid13/pymanifold:latest `
+And run the project within Docker using in the root folder off of pyManifold's Repo:
+` docker run -it --rm -v $(pwd):/tmp -w /tmp  pymanifold python3 src/pymanifold.py `
+For access to OpenModelica on top of pymanifold, run:
+` docker container run -it --user $(id -u):$(id -g) --rm pymf-om:jessie bash `
+
+## Usage
 The code to create a simple T-Junction droplet generator is as follows found in this
 [test script](src/test.py), but is still in development:
 
@@ -120,7 +63,7 @@ sch.channel('rectangle', 0.5, 0.1, 0.1, junction_node,
 
 print(sch.solve())
 
-# Return: Model object from pySMT with dictionary like mapping of each Symbol to its value
+# Return: Model object from dReal with dictionary like mapping of each variable to a range of values
 ```
 
 ## Development
