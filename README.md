@@ -23,14 +23,23 @@ machine for development and testing purposes.
 ### Installing
 
 This can be installed within Python 3 using ` pip install --user pymanifold `
-However this will require building dReal4 from source and OMPython from [GitHub](https://github.com/OpenModelica/OMPython) and [OpenModelica](https://openmodelica.org/), alternatively we provide a Docker image which contains all of these libraries baked in.
-Build the docker image using in the base directory of this repo:
-` docker build -t pymanifold . `
-or clone using ` docker pull jsreid13/pymanifold:latest `
-And run the project within Docker using in the root folder off of pyManifold's Repo:
-` docker run -it --rm -v $(pwd):/tmp -w /tmp  pymanifold python3 src/pymanifold.py `
-For access to OpenModelica on top of pymanifold, run:
-` docker container run -it --user $(id -u):$(id -g) --rm pymf-om:jessie bash `
+However this will require building [dReal4 from source](https://github.com/dreal/dreal4) 
+and installing OMPython from [GitHub](https://github.com/OpenModelica/OMPython) along
+with [OpenModelica](https://openmodelica.org/), alternatively we provide a Docker image
+which contains all of these libraries baked in.
+You can get the docker image by running:
+``` 
+docker pull jsreid13/pymanifold:latest 
+```
+Run the single\_channel\_test,py script within this image using:
+```
+docker container run -it --rm -v $(pwd):/tmp -w /tmp jsreid13/pymanifold:latest python3 tests/single_channel_test.py
+```
+_Note: You need to run this command in your terminal while in the root of this repository_
+
+Any script within this repo can be run using this command, to run your own script you need to
+change the directory that you run this command from within your terminal to the directory 
+containing that script and change *tests/single_channel_test.py* to the name of your script
 
 ## Usage
 The code to create a simple T-Junction droplet generator is as follows found in this
