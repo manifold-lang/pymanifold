@@ -1,13 +1,9 @@
 from pprint import pprint
 import math
 import networkx as nx
-#  import matplotlib.pyplot as plt  # include if you want to show graph
-#  from pysmt.shortcuts import Variable, Plus, Times, Div, Pow, Equals, Real
-#  from pysmt.shortcuts import Minus, GE, GT, LE, LT, And, get_model, is_sat
-from build.lib.data.dreal.symbolic import Variable, logical_and, sin, cos
-from build.lib.data.dreal.api import CheckSatisfiability, Minimize
-#  from pysmt.typing import REAL
-#  from pysmt.logics import QF_NRA
+#  dReal SMT solver
+from dreal.symbolic import Variable, logical_and, sin, cos
+from dreal.api import CheckSatisfiability, Minimize
 
 
 class Schematic():
