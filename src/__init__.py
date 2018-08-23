@@ -1,1 +1,1 @@
-from pymanifold.pymanifold import Schematic
+from src.pymanifold import Schematic

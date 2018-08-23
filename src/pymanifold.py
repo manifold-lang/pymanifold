@@ -5,6 +5,31 @@ import networkx as nx
 from dreal.symbolic import Variable, logical_and, sin, cos
 from dreal.api import CheckSatisfiability, Minimize
 
+from src import constants
+
+
+class Fluid():
+
+    def __init__(self, fluid):
+        self.min_density = constants.FluidProperties().getDensity(fluid)
+        self.min_resistivity = constants.FluidProperties().getResistivity(fluid)
+        self.min_viscosity = constants.FluidProperties().getViscosity(fluid)
+        self.min_pressure = False
+
+    def updateFluidProperties(self,
+                              min_density=False,
+                              min_viscosity=False,
+                              min_pressure=False,
+                              min_resistivity=False
+                              ):
+        self.min_density = min_density
+        self.min_resistivity = min_resistivity
+        self.min_viscosity = min_viscosity
+        self.min_pressure = min_pressure
+
+    def __repr__(self):
+        return repr((self.min_density, self.min_resistivity, self.min_viscosity, self.min_pressure))
+
 
 class Schematic():
     """Create new schematic which contains all of the connections and ports
@@ -40,7 +65,8 @@ class Schematic():
                 min_width=False,
                 min_height=False,
                 kind='rectangle',
-                phase='None'):
+                phase='None'
+                ):
         """Create new connection between two nodes/ports with attributes
         consisting of the dimensions of the channel to be used to create the
         SMT equations to calculate solvability of the circuit
@@ -123,8 +149,8 @@ class Schematic():
              min_flow_rate=False,
              x=False,
              y=False,
-             density=False,
-             min_viscosity=False):
+             fluid_name='default'
+             ):
         """Create new port where fluids can enter or exit the circuit, any
         optional tag left empty will be converted to a variable for the SMT
         solver to solve for a give a value, units in brackets
@@ -149,18 +175,21 @@ class Schematic():
         if kind.lower() not in self.translation_strats.keys():
             raise ValueError("kind must be %s" % self.translation_strats.keys())
 
+        # Initialize fluid properties
+        fluid_properties = Fluid(fluid_name)
+
         # Ports are stored with nodes because ports are just a specific type of
         # node that has a constant flow rate
         # only accept ports of the right kind (input or output)
         attributes = {'kind': kind.lower(),
                       'viscosity': Variable(name+'_viscosity'),
-                      'min_viscosity': min_viscosity,
+                      'min_viscosity': fluid_properties.min_viscosity,
                       'pressure': Variable(name+'_pressure'),
                       'min_pressure': min_pressure,
                       'flow_rate': Variable(name+'_flow_rate'),
                       'min_flow_rate': min_flow_rate,
                       'density': Variable(name+'_density'),
-                      'min_density': density,
+                      'min_density': fluid_properties.min_density,
                       'x': Variable(name+'_X'),
                       'y': Variable(name+'_Y'),
                       'min_x': x,
