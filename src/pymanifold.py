@@ -1,5 +1,8 @@
 from pprint import pprint
 import math
+import json
+import os
+import sys
 import networkx as nx
 #  dReal SMT solver
 from dreal.symbolic import Variable, logical_and, sin, cos
@@ -109,9 +112,9 @@ class Schematic():
                       'height': Variable('_'.join([port_from, port_to, 'height'])),
                       'min_height': min_height,
                       'flow_rate': Variable('_'.join([port_from, port_to, 'flow_rate'])),
-                      'droplet_volume': Variable('_'.join([port_from, port_to, 'Dvol'])),
+                      'droplet_volume': Variable('_'.join([port_from, port_to, 'droplet_volume'])),
                       'viscosity': Variable('_'.join([port_from, port_to, 'viscosity'])),
-                      'resistance': Variable('_'.join([port_from, port_to, 'res'])),
+                      'resistance': Variable('_'.join([port_from, port_to, 'resistance'])),
                       'phase': phase.lower(),
                       'port_from': port_from,
                       'port_to': port_to
@@ -190,8 +193,8 @@ class Schematic():
                       'min_flow_rate': min_flow_rate,
                       'density': Variable(name+'_density'),
                       'min_density': fluid_properties.min_density,
-                      'x': Variable(name+'_X'),
-                      'y': Variable(name+'_Y'),
+                      'x': Variable(name+'_x'),
+                      'y': Variable(name+'_y'),
                       'min_x': x,
                       'min_y': y
                       }
@@ -257,10 +260,10 @@ class Schematic():
                       'min_viscosity': None,
                       'density': Variable(name+'_density'),
                       'min_density': None,
-                      'x': Variable(name+'_X'),
-                      'y': Variable(name+'_Y'),
-                      'min_x': x,
-                      'min_y': y
+                      'x': Variable(name+'_x'),
+                      'min_x': None,
+                      'y': Variable(name+'_y'),
+                      'min_y': None
                       }
 
         # list of values that should all be positive numbers
@@ -281,6 +284,88 @@ class Schematic():
         # Add argument to attributes within NetworkX
         for key, attr in attributes.items():
                 self.dg.nodes[name][key] = attr
+        return
+
+    def elec_port(self,
+                  name,
+                  kind,
+                  min_pressure=False,
+                  min_flow_rate=False,
+                  x=False,
+                  y=False,
+                  voltage=False,
+                  current=False,
+                  fluid_name='default'):
+        """Create new electrical port where fluids and voltages can enter or exit the circuit, any
+        optional tag left empty will be converted to a variable for the SMT
+        solver to solve for a given value, units in brackets
+
+        :param str name: The name of the port to use when defining channels
+        :param str kind: Define if this is an 'input' or 'output' port
+        :param float density: Density of fluid (kg/m^3)
+        :param float min_viscosity: Viscosity of the fluid (Pa*s)
+        :param float min_pressure: Pressure of the input fluid, (Pa)
+        :param float min_flow_rate - flow rate of input fluid, (m^3/s)
+        :param float X: x-position of port on chip schematic (m)
+        :param float Y: y-position of port on chip schematic (m)
+        :param float voltage: Voltage value passing through the port (V)
+        :param float current: Current value passing through the port (A)
+        :returns: None -- no issues with creating this port
+        :raises: TypeError if an input parameter is wrong type
+                 ValueError if an input parameter has an invalid value
+        """
+        # Checking that arguments are valid
+        if not isinstance(name, str) or not isinstance(kind, str):
+            raise TypeError("name and kind must be strings")
+        if name in self.dg.nodes:
+            raise ValueError("Must provide a unique name")
+        if kind.lower() not in self.translation_strats.keys():
+            raise ValueError("kind must be %s" % self.translation_strats.keys())
+
+        # Initialize fluid properties
+        fluid_properties = Fluid(fluid_name)
+
+        # Ports are stored with nodes because ports are just a specific type of
+        # node that has a constant flow rate
+        # only accept ports of the right kind (input or output)
+        attributes = {'kind': kind.lower(),
+                      'viscosity': Variable(name+'_viscosity'),
+                      'min_viscosity': fluid_properties.min_viscosity,
+                      'pressure': Variable(name+'_pressure'),
+                      'min_pressure': min_pressure,
+                      'flow_rate': Variable(name+'_flow_rate'),
+                      'min_flow_rate': min_flow_rate,
+                      'density': Variable(name+'_density'),
+                      'min_density': fluid_properties.min_density,
+                      'x': Variable(name+'_X'),
+                      'y': Variable(name+'_Y'),
+                      'min_x': x,
+                      'min_y': y,
+                      'voltage': voltage,
+                      'current': current,
+                      }
+
+        # list of values that should all be positive numbers
+        not_neg = ['min_x', 'min_y', 'min_pressure', 'min_flow_rate',
+                   'min_viscosity', 'min_density']
+        for param in not_neg:
+            try:
+                if attributes[param] is False:
+                    continue
+                elif attributes[param] < 0:
+                    raise ValueError("port '%s' parameter '%s' must be >= 0" %
+                                     (name, param))
+            except TypeError as e:
+                raise TypeError("port '%s' parameter '%s' must be int" %
+                                (name, param))
+            except ValueError as e:
+                raise ValueError(e)
+
+        # Create this node in the graph
+        self.dg.add_node(name)
+        # Add argument to attributes within NetworkX
+        for key, attr in attributes.items():
+            self.dg.nodes[name][key] = attr
         return
 
     def retrieve(self, port_in, port_out, attr):
@@ -953,3 +1038,117 @@ class Schematic():
         """
         self.translate_schematic()
         return self.invoke_backend(show)
+
+    def to_json(self, path=os.getcwd() + 'test.json'):
+        """Converts designed schematic to a json file following Manifold IR grammar
+
+        :param str path: Path to save the json file to on the computer
+        """
+        nx_json = nx.readwrite.json_graph.node_link_data(self.dg)
+        links = [str(i) for i in nx_json['links']]
+        # Form will be ['a', ':', '[0,', '1]', ...]
+        output = self.solve()
+        split_output = str(output).split()
+        dreal_output = {}
+        values = []
+        # start at the third value, take every third and fourth which will be the range of values
+        for val1, val2 in zip(split_output[2::4], split_output[3::4]):
+            val1 = float(val1.lstrip('[').rstrip(','))
+            val2 = float(val2.rstrip(']'))
+
+            values.append((val1, val2))
+        names = split_output[0::4]
+        for name, value in zip(names, values):
+            if sys.float_info.max in value:
+                print('Warning: %s range includes inf, needs upper bound' % name)
+            dreal_output[name] = value
+
+
+        #  edits1 = {str(key): str(value) for key, value in edits.items()}
+        #  fin_edits = {str(key): str(value) for key, value in edits.items()}
+
+        # TODO: Update networkx output nx_json with values returned by dReal
+        for attribute, value in dreal_output.items():
+            attr_split = attribute.split("_")
+            for link_attribute_dict in nx_json["links"]:
+                if link_attribute_dict["source"] == attr_split[0] and\
+                        link_attribute_dict["target"] == attr_split[1]:
+                    link_attribute_dict["_".join(attr_split[2:])] = value
+
+            for node_attribute_dict in nx_json["nodes"]:
+                if node_attribute_dict["id"] == attr_split[0]:
+                    node_attribute_dict["_".join(attr_split[1:])] = value
+        #  for node_attribute_dict in nx_json["nodes"]:
+        #      for attr, value in node_attribute_dict.items():
+        #          if isinstance(value, Variable):
+        #              node_attribute_dict[attr] = dreal_output['_'.join([node_attribute_dict["id"],
+        #                                                                 attr])]
+        #  #  pprint(nx_json)
+        #  for link_attribute_dict in nx_json["links"]:
+        #      for attr, value in link_attribute_dict.items():
+        #          if isinstance(value, Variable):
+        #              link_attribute_dict[attr] = dreal_output['_'.join([link_attribute_dict["source"],
+        #                                                                 link_attribute_dict["target"],
+        #                                                                 attr])]
+
+        manifold_ir = {"name": "Json Data",
+                       "userDefinedTypes": {},
+                       "portTypes": {},
+                       "nodeTypes": {},
+                       "constraintTypes": {},
+                       "nodes": {},
+                       "connections": {},
+                       "constraints": {}
+                       }
+        for key, value in nx_json.items():
+            if type(value) != list:
+                manifold_ir['constraints'][key] = value
+
+        for idx, link_attribute_dict in enumerate(nx_json["links"]):
+            # Channel name is ch1, ch2, etc.
+            channel_id = "ch" + str(idx)
+            # Source is the same as port_from, but generated by Networkx
+            # TODO: Remove port_from and port_to
+            manifold_ir["connections"][channel_id] = {"from": link_attribute_dict["source"],
+                                                      "to": link_attribute_dict["target"],
+                                                      "attributes": {}
+                                                      }
+            for key, value in link_attribute_dict.items():
+                # These are accounted for above
+                if key not in ("port_from", "port_to", "source", "target") and\
+                        not isinstance(value, Variable):
+                    manifold_ir["connections"][channel_id]["attributes"][key] = value
+
+        for idx, node_attribute_dict in enumerate(nx_json["nodes"]):
+            # Node name is pT1, pT2, etc.
+            node_id = "pT" + str(idx)
+            # Kind is used to determine if node is a port
+            node_kind = node_attribute_dict["kind"]
+            manifold_ir["nodes"][node_id] = {"type": node_kind,
+                                             "portAttrs": node_attribute_dict["id"],
+                                             "attributes": {}
+                                             }
+            # If the node kind is input or output then it is a port
+            if node_kind in ("input", "output"):
+                manifold_ir["portTypes"][node_id] = {"signalType": node_attribute_dict["kind"],
+                                                     "attributes": {}
+                                                     }
+            else:
+                manifold_ir["nodeTypes"][node_id] = {"signalType": node_attribute_dict["kind"],
+                                                     "attributes": {}
+                                                     }
+            # Dump values of all other parameters into that entry for node, and portTypes if its
+            # a port, nodeTypes if its just a node
+            for key, value in node_attribute_dict.items():
+                if isinstance(value, Variable):
+                    continue
+                manifold_ir["nodes"][node_id]["attributes"][key] = value
+                if node_kind in ("input", "output"):
+                    manifold_ir["portTypes"][node_id]["attributes"][key] = value
+                else:
+                    manifold_ir["nodeTypes"][node_id]["attributes"][key] = value
+        pprint(dreal_output)
+        pprint(manifold_ir)
+
+        with open(path, 'w') as outfile:
+            json.dump(manifold_ir, outfile, separators=(',', ':'))
