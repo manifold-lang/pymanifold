@@ -1045,31 +1045,17 @@ class Schematic():
         :param str path: Path to save the json file to on the computer
         """
         nx_json = nx.readwrite.json_graph.node_link_data(self.dg)
-        links = [str(i) for i in nx_json['links']]
-        # Form will be ['a', ':', '[0,', '1]', ...]
         output = self.solve()
-        split_output = str(output).split()
         dreal_output = {}
-        values = []
         # start at the third value, take every third and fourth which will be the range of values
-        for val1, val2 in zip(split_output[2::4], split_output[3::4]):
-            val1 = float(val1.lstrip('[').rstrip(','))
-            val2 = float(val2.rstrip(']'))
-
-            values.append((val1, val2))
-        names = split_output[0::4]
-        for name, value in zip(names, values):
+        for name, interval in output.items():
+            value = (interval.lb(), interval.ub())
             if sys.float_info.max in value:
                 print('Warning: %s range includes inf, needs upper bound' % name)
             dreal_output[name] = value
 
-
-        #  edits1 = {str(key): str(value) for key, value in edits.items()}
-        #  fin_edits = {str(key): str(value) for key, value in edits.items()}
-
-        # TODO: Update networkx output nx_json with values returned by dReal
         for attribute, value in dreal_output.items():
-            attr_split = attribute.split("_")
+            attr_split = str(attribute).split("_")
             for link_attribute_dict in nx_json["links"]:
                 if link_attribute_dict["source"] == attr_split[0] and\
                         link_attribute_dict["target"] == attr_split[1]:
@@ -1078,18 +1064,6 @@ class Schematic():
             for node_attribute_dict in nx_json["nodes"]:
                 if node_attribute_dict["id"] == attr_split[0]:
                     node_attribute_dict["_".join(attr_split[1:])] = value
-        #  for node_attribute_dict in nx_json["nodes"]:
-        #      for attr, value in node_attribute_dict.items():
-        #          if isinstance(value, Variable):
-        #              node_attribute_dict[attr] = dreal_output['_'.join([node_attribute_dict["id"],
-        #                                                                 attr])]
-        #  #  pprint(nx_json)
-        #  for link_attribute_dict in nx_json["links"]:
-        #      for attr, value in link_attribute_dict.items():
-        #          if isinstance(value, Variable):
-        #              link_attribute_dict[attr] = dreal_output['_'.join([link_attribute_dict["source"],
-        #                                                                 link_attribute_dict["target"],
-        #                                                                 attr])]
 
         manifold_ir = {"name": "Json Data",
                        "userDefinedTypes": {},
