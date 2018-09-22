@@ -1,0 +1,5 @@
+dist
+build
+src/__pycache__
+pymanifold.egg-info
+.tox
