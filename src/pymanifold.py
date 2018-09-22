@@ -62,6 +62,35 @@ class Schematic():
         # DiGraph that will contain all nodes and channels
         self.dg = nx.DiGraph()
 
+    def validate_params(self, params: dict, component: str, name: str):
+        """TODO: Docstring for validate_params.
+
+        :param params dict: Dictionary containing all parameters and their cooresponding type
+        :param component str: What primitive type this is checking, Node, Port, Channel, etc.
+        :param name str: Name of the component
+        :raises: ValueError
+        :returns: None
+
+        """
+        for param, value in params.items():
+            # Parameter is still False, so skip it since user didnt define anything
+            if not param:
+                continue
+            if value == 'string':
+                if not isinstance(param, str):
+                    raise TypeError("%s '%s' param %s must be a string" %
+                                    (component, name, param))
+            elif value == 'number':
+                # list of values that should all be positive numbers, in doing so also
+                # checks if its an int or float
+                try:
+                    if param < 0:
+                        raise ValueError("%s '%s' parameter '%s' must be >= 0" %
+                                         (component, name, param))
+                except TypeError as e:
+                    raise TypeError("%s '%s' parameter '%s' must be int" %
+                                    (component, name, param))
+
     def channel(self,
                 port_from,
                 port_to,
@@ -92,13 +121,26 @@ class Schematic():
         # channel resistance
         valid_kinds = ("rectangle")
 
+        name = (port_from, port_to)
+
+        user_provided_params = {port_from: 'string',
+                                port_to: 'string',
+                                min_length: 'number',
+                                min_width: 'number',
+                                min_height: 'number',
+                                kind: 'string',
+                                phase: 'string'
+                                }
         # Checking that arguments are valid
         if kind not in valid_kinds:
             raise ValueError("Valid channel kinds are: %s" % valid_kinds)
-        if port_from not in self.dg.nodes:
-            raise ValueError("port_from node doesn't exist")
-        elif port_to not in self.dg.nodes():
-            raise ValueError("port_to node doesn't exist")
+
+        self.validate_params(user_provided_params, 'Channel', name)
+
+        if (port_from, port_to) in self.dg.edges:
+            raise ValueError("Channel already exists between these nodes %s" % (port_from, port_to))
+        if kind.lower() not in self.translation_strats.keys():
+            raise ValueError("kind must be either %s" % self.translation_strats.keys())
 
         # Add the information about that connection to another dict
         # There's extra parameters in here than in the arguments because they
@@ -106,40 +148,23 @@ class Schematic():
         # Channels do not have pressure though, since it decreases linearly
         # across the channel
         attributes = {'kind': kind,
-                      'length': Variable('_'.join([port_from, port_to, 'length'])),
+                      'length': Variable('_'.join([*name, 'length'])),
                       'min_length': min_length,
-                      'width': Variable('_'.join([port_from, port_to, 'width'])),
+                      'width': Variable('_'.join([*name, 'width'])),
                       'min_width': min_width,
-                      'height': Variable('_'.join([port_from, port_to, 'height'])),
+                      'height': Variable('_'.join([*name, 'height'])),
                       'min_height': min_height,
-                      'flow_rate': Variable('_'.join([port_from, port_to, 'flow_rate'])),
-                      'droplet_volume': Variable('_'.join([port_from, port_to, 'droplet_volume'])),
-                      'viscosity': Variable('_'.join([port_from, port_to, 'viscosity'])),
-                      'resistance': Variable('_'.join([port_from, port_to, 'resistance'])),
+                      'flow_rate': Variable('_'.join([*name, 'flow_rate'])),
+                      'droplet_volume': Variable('_'.join([*name, 'droplet_volume'])),
+                      'viscosity': Variable('_'.join([*name, 'viscosity'])),
+                      'resistance': Variable('_'.join([*name, 'resistance'])),
                       'phase': phase.lower(),
                       'port_from': port_from,
                       'port_to': port_to
                       }
 
-        # list of values that should all be positive numbers
-        not_neg = ['min_length', 'min_width', 'min_height']
-        for param in not_neg:
-            try:
-                if attributes[param] is False:
-                    continue
-                elif attributes[param] < 0:
-                    raise ValueError("channel '%s' parameter '%s' must be >= 0"
-                                     % (param))
-            except TypeError as e:
-                raise TypeError("channel %s parameter must be int" % param)
-            except ValueError as e:
-                raise ValueError(e)
-
-        # Can't have two of the same channel
-        if (port_from, port_to) in self.dg.edges:
-            raise ValueError("Channel already exists between these nodes")
         # Create this edge in the graph
-        self.dg.add_edge(port_from, port_to)
+        self.dg.add_edge(*name)
 
         # Add argument to attributes within NetworkX
         for key, attr in attributes.items():
@@ -171,13 +196,21 @@ class Schematic():
         :raises: TypeError if an input parameter is wrong type
                  ValueError if an input parameter has an invalid value
         """
+        user_provided_params = {name: 'string',
+                                min_pressure: 'number',
+                                min_flow_rate: 'number',
+                                x: 'number',
+                                y: 'number',
+                                kind: 'string',
+                                fluid_name: 'string'
+                                }
         # Checking that arguments are valid
-        if not isinstance(name, str) or not isinstance(kind, str):
-            raise TypeError("name and kind must be strings")
+        self.validate_params(user_provided_params, 'port', name)
+
         if name in self.dg.nodes:
             raise ValueError("Must provide a unique name")
         if kind.lower() not in self.translation_strats.keys():
-            raise ValueError("kind must be %s" % self.translation_strats.keys())
+            raise ValueError("kind must be either %s" % self.translation_strats.keys())
 
         # Initialize fluid properties
         fluid_properties = Fluid(fluid_name)
@@ -200,22 +233,6 @@ class Schematic():
                       'min_y': y
                       }
 
-        # list of values that should all be positive numbers
-        not_neg = ['min_x', 'min_y', 'min_pressure', 'min_flow_rate',
-                   'min_viscosity', 'min_density']
-        for param in not_neg:
-            try:
-                if attributes[param] is False:
-                    continue
-                elif attributes[param] < 0:
-                    raise ValueError("port '%s' parameter '%s' must be >= 0" %
-                                     (name, param))
-            except TypeError as e:
-                raise TypeError("port '%s' parameter '%s' must be int" %
-                                (name, param))
-            except ValueError as e:
-                raise ValueError(e)
-
         # Create this node in the graph
         self.dg.add_node(name)
         # Add argument to attributes within NetworkX
@@ -237,13 +254,18 @@ class Schematic():
         :raises: TypeError if an input parameter is wrong type
                  ValueError if an input parameter has an invalid value
         """
+        user_provided_params = {name: 'string',
+                                x: 'number',
+                                y: 'number',
+                                kind: 'string'
+                                }
         # Checking that arguments are valid
-        if not isinstance(name, str) or not isinstance(kind, str):
-            raise TypeError("name and kind must be strings")
+        self.validate_params(user_provided_params, 'node', name)
+
         if name in self.dg.nodes:
             raise ValueError("Must provide a unique name")
         if kind.lower() not in self.translation_strats.keys():
-            raise ValueError("kind must be %s" % self.translation_strats.keys())
+            raise ValueError("kind must be either %s" % self.translation_strats.keys())
 
         # Ports are stored with nodes because ports are just a specific type of
         # node that has a constant flow rate only accept ports of the right
@@ -266,19 +288,6 @@ class Schematic():
                       'y': Variable(name + '_y'),
                       'min_y': None
                       }
-
-        # list of values that should all be positive numbers
-        not_neg = ['min_x', 'min_y']
-        for param in not_neg:
-            try:
-                if attributes[param] < 0:
-                    raise ValueError("port '%s' parameter '%s' must be >= 0" %
-                                     (name, param))
-            except TypeError as e:
-                raise TypeError("Port '%s' parameter '%s' must be int" %
-                                (name, param))
-            except ValueError as e:
-                raise ValueError(e)
 
         # Create this node in the graph
         self.dg.add_node(name)
@@ -315,13 +324,23 @@ class Schematic():
         :raises: TypeError if an input parameter is wrong type
                  ValueError if an input parameter has an invalid value
         """
+        user_provided_params = {name: 'string',
+                                min_pressure: 'number',
+                                min_flow_rate: 'number',
+                                x: 'number',
+                                y: 'number',
+                                voltage: 'number',
+                                current: 'number',
+                                kind: 'string',
+                                fluid_name: 'string'
+                                }
         # Checking that arguments are valid
-        if not isinstance(name, str) or not isinstance(kind, str):
-            raise TypeError("name and kind must be strings")
+        self.validate_params(user_provided_params, 'electrical port', name)
+
         if name in self.dg.nodes:
             raise ValueError("Must provide a unique name")
         if kind.lower() not in self.translation_strats.keys():
-            raise ValueError("kind must be %s" % self.translation_strats.keys())
+            raise ValueError("kind must be either %s" % self.translation_strats.keys())
 
         # Initialize fluid properties
         fluid_properties = Fluid(fluid_name)
@@ -345,22 +364,6 @@ class Schematic():
                       'voltage': voltage,
                       'current': current,
                       }
-
-        # list of values that should all be positive numbers
-        not_neg = ['min_x', 'min_y', 'min_pressure', 'min_flow_rate',
-                   'min_viscosity', 'min_density']
-        for param in not_neg:
-            try:
-                if attributes[param] is False:
-                    continue
-                elif attributes[param] < 0:
-                    raise ValueError("port '%s' parameter '%s' must be >= 0" %
-                                     (name, param))
-            except TypeError as e:
-                raise TypeError("port '%s' parameter '%s' must be int" %
-                                (name, param))
-            except ValueError as e:
-                raise ValueError(e)
 
         # Create this node in the graph
         self.dg.add_node(name)
