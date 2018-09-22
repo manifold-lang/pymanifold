@@ -240,7 +240,7 @@ def translate_tjunc(dg, name, crit_crossing_angle=0.5):
         raise ValueError("T-junction %s must have 3 connections" % name)
 
     # Since T-junction is just a specialized node, call translate node
-    algorithms.translate_node(name)
+    translate_node(dg, name)
 
     # Renaming for consistency with the other nodes
     junction_node_name = name
@@ -308,7 +308,8 @@ def translate_tjunc(dg, name, crit_crossing_angle=0.5):
                  algorithms.retrieve(dg, output_channel_name, 'flow_rate'))
 
     # Assert that continuous and output channels are in a straight line
-    exprs.append(algorithms.channels_in_straight_line(continuous_node_name,
+    exprs.append(algorithms.channels_in_straight_line(dg,
+                                                      continuous_node_name,
                                                       junction_node_name,
                                                       output_node_name
                                                       ))
@@ -322,6 +323,7 @@ def translate_tjunc(dg, name, crit_crossing_angle=0.5):
     # its needed
     exprs.append(algorithms.retrieve(dg, output_channel_name, 'droplet_volume') ==
                  algorithms.calculate_droplet_volume(
+                     dg,
                      algorithms.retrieve(dg, output_channel_name, 'height'),
                      algorithms.retrieve(dg, output_channel_name, 'width'),
                      algorithms.retrieve(dg, dispersed_channel_name, 'width'),
@@ -334,27 +336,30 @@ def translate_tjunc(dg, name, crit_crossing_angle=0.5):
     cosine_squared_theta_crit = math.cos(math.radians(crit_crossing_angle))**2
     # Continuous to dispersed
     exprs.append(cosine_squared_theta_crit <=
-                 algorithms.cosine_law_crit_angle(continuous_node_name,
+                 algorithms.cosine_law_crit_angle(dg,
+                                                  continuous_node_name,
                                                   junction_node_name,
                                                   dispersed_node_name
                                                   ))
     # Continuous to output
     exprs.append(cosine_squared_theta_crit <=
-                 algorithms.cosine_law_crit_angle(continuous_node_name,
+                 algorithms.cosine_law_crit_angle(dg,
+                                                  continuous_node_name,
                                                   junction_node_name,
                                                   output_node_name
                                                   ))
     # Output to dispersed
     exprs.append(cosine_squared_theta_crit <=
-                 algorithms.cosine_law_crit_angle(output_node_name,
+                 algorithms.cosine_law_crit_angle(dg,
+                                                  output_node_name,
                                                   junction_node_name,
                                                   dispersed_node_name
                                                   ))
     # Call translate on output
-    algorithms.translation_strats[algorithms.retrieve(dg,
-                                                      output_node_name,
-                                                      'kind'
-                                                      )](output_node_name)
+    translation_strats[algorithms.retrieve(dg,
+                                           output_node_name,
+                                           'kind'
+                                           )](dg, output_node_name)
     return exprs
 
 
