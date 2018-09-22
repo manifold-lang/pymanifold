@@ -1,2 +1,7 @@
 src/*
 15.smt2
+dist
+build
+src/__pycache__
+pymanifold.egg-info
+.tox

@@ -4,10 +4,12 @@ name = "pypi"
 url = "https://pypi.python.org/simple"
 
 [requires]
-python_version = "3.5"
+python_version = "3.6"
 
 [dev-packages]
 
 [packages]
 networkx = "*"
 matplotlib = "*"
+tox = "*"
+pysmt = "*"

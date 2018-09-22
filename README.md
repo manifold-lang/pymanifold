@@ -20,26 +20,28 @@ that the circuit will remain functional
 These instructions will get you a copy of the project up and running on your local
 machine for development and testing purposes.
 
-### Prerequisites
-
-This library requires installaion of [pysmt](https://github.com/pysmt/pysmt), an SMT
-solver library for python used to determine if the designed microfluidic circuit will
-work and if so within what range of parameters.
-
-Once this is installed (remember to call ``` pysmt-install --z3 ``` to install the
-Z3 SMT solver within pysmt and addit to you PYTHONPATH environment variable my calling
-``` pysmt-install --env ``` and running that command. This installs the Z3 solver my Microsoft
-to use to solve the SMT2 equations this.
-
 ### Installing
 
-Currently this is not on pip so to use it clone the repository using ```
-git clone https://github.com/jsreid13/pymanifold.git ``` and put the script src/pymanifold.py
-within your python3 site packages (C:\\python35\Lib\site-packages on Windows, 
-/usr/local/lib/python3.5/dist-packages on Linux).
+This can be installed within Python 3 using ` pip install --user pymanifold `
+However this will require building [dReal4 from source](https://github.com/dreal/dreal4) 
+and installing OMPython from [GitHub](https://github.com/OpenModelica/OMPython) along
+with [OpenModelica](https://openmodelica.org/), alternatively we provide a Docker image
+which contains all of these libraries baked in.
+You can get the docker image by running:
+``` 
+docker pull jsreid13/pymanifold:latest 
+```
+Run the single\_channel\_test,py script within this image using:
+```
+docker container run -it --rm -v $(pwd):/tmp -w /tmp jsreid13/pymanifold:latest python3 tests/single_channel_test.py
+```
+_Note: You need to run this command in your terminal while in the root of this repository_
+
+Any script within this repo can be run using this command, to run your own script you need to
+change the directory that you run this command from within your terminal to the directory 
+containing that script and change *tests/single_channel_test.py* to the name of your script
 
 ## Usage
-
 The code to create a simple T-Junction droplet generator is as follows found in this
 [test script](src/test.py), but is still in development:
 
@@ -70,7 +72,7 @@ sch.channel('rectangle', 0.5, 0.1, 0.1, junction_node,
 
 print(sch.solve())
 
-# Return: Model object from pySMT with dictionary like mapping of each Symbol to its value
+# Return: Model object from dReal with dictionary like mapping of each variable to a range of values
 ```
 
 ## Development
