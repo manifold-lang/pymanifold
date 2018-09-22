@@ -25,8 +25,8 @@ machine for development and testing purposes.
 This can be installed within Python 3 using ` pip install --user pymanifold `
 However this will require building [dReal4 from source](https://github.com/dreal/dreal4) 
 and installing OMPython from [GitHub](https://github.com/OpenModelica/OMPython) along
-with [OpenModelica](https://openmodelica.org/), alternatively we provide a Docker image
-which contains all of these libraries baked in.
+with [OpenModelica](https://openmodelica.org/) if you need electrical simulations, 
+alternatively we provide a Docker image which contains all of these libraries baked in.
 You can get the docker image by running:
 ``` 
 docker pull jsreid13/pymanifold:latest 
@@ -43,12 +43,12 @@ containing that script and change *tests/single_channel_test.py* to the name of 
 
 ## Usage
 The code to create a simple T-Junction droplet generator is as follows found in this
-[test script](src/test.py), but is still in development:
+[test script](src/t_junction_test.py), but is still in development:
 
-```
-import pymanifold as pymf
+```python
+import src.pymanifold as pymf
 
-sch = pymf.Schematic()
+sch = pymf.Schematic([0, 0, 10, 10])
 #       D
 #       |
 #   C---N---O
@@ -56,23 +56,27 @@ continuous_node = 'continuous'
 dispersed_node = 'dispersed'
 output_node = 'out'
 junction_node = 't_j'
+min_channel_length = 1
+min_channel_width = 1
+min_channel_height = 0.001
+
 # Continuous and output node should have same flow rate
-# syntax: sch.port(name, design, pressure, flow_rate, X_pos, Y_pos)
-sch.port(continuous_node, 'input', 2, 5, 0, 0)
-sch.port(dispersed_node, 'input', 2, 2, 1, 1)
-sch.port(output_node, 'output', 2, 5, 2, 0)
-sch.node(junction_node, 2, 1, 0, kind='t-junction')
+# syntax: sch.port(name, design[, pressure, flow_rate, density, X_pos, Y_pos])
+sch.port(continuous_node, 'input', min_pressure=1, fluid_name='mineraloil')
+sch.port(dispersed_node, 'input', min_pressure=1, fluid_name='water')
+sch.port(output_node, 'output')
+
+# syntax: sch.node(name, X_pos, Y_pos, kind='node')
+sch.node(junction_node, 1, 0, kind='t-junction')
+
 # syntax: sch.channel(shape, min_length, width, height, input, output)
-sch.channel('rectangle', 0.5, 0.1, 0.1, continuous_node,
-            junction_node, phase='continuous')
-sch.channel('rectangle', 0.5, 0.1, 0.1, dispersed_node,
-            junction_node, phase='dispersed')
-sch.channel('rectangle', 0.5, 0.1, 0.1, junction_node,
-            output_node, phase='output')
+sch.channel(junction_node, output_node, phase='output')
+sch.channel(continuous_node, junction_node, phase='continuous')
+sch.channel(dispersed_node, junction_node, phase='dispersed')
 
 print(sch.solve())
 
-# Return: Model object from dReal with dictionary like mapping of each variable to a range of values
+# Returns a model object from dReal with dictionary like mapping of each variable to a range of values
 ```
 
 ## Development
@@ -81,22 +85,20 @@ This project is still in development, features that need to be added are:
 
 * Add an elecrophoretic cross as a new node type with voltages at two ends and pressure driven flow on
 the other two short ends. Steps:
-  * Create a new translate method named translate_ep_cross
+  * Create a new translate method named translate\_ep\_cross
     * This requires 4 connections, two must have a voltage constraint and the other two have a pressure
 	constraint
 	  * This will require the creation of a new port type that is a voltage input, currently only
 	  fluid injection ports exist with a pressure and flow rate, this will have a voltage and no flow
 	* Needs to append correct SMT expressions based on those in Stephen Chou's report to simulate an
 	electropheretic cross(EP cross) https://drive.google.com/open?id=1UF-Jun4-ppJHyb1wMQFqFzaUNbZSdkzl
-  * Add the name of that translation method to the translate_nodes under the name ep_cross
+  * Add the name of that translation method to the translate\_nodes under the name ep\_cross
 * Feature to output electrical characteristics of chip to MapleSim(or something similar)
-  * Possibly use this library from Dassault Systems [FMPy](https://github.com/CATIA-Systems/FMPy)
-  * Or produce Modelica code using [OMPython](https://github.com/OpenModelica/OMPython) 
+  * Produce Modelica code using [OMPython](https://github.com/OpenModelica/OMPython) 
   to feed into MapleSim
 * Create a website to outline usage using [read the docs](https://readthedocs.org/)
   * Fill in the content to match other readthedocs like [pysmt](http://pysmt.readthedocs.io)
   or [Jupyter](http://jupyter.readthedocs.io)
-* Put this library on pip to simplify installation
 * Gather a database of real world microfluidic chip designs and information about their output
 * Implement a machine learning algorithm on this database to improve the library's accuracy in
 determining if different designs will work
