@@ -22,18 +22,9 @@ sch.port(output_node, 'output')
 sch.node(junction_node, 1, 0, kind='t-junction')
 
 # syntax: sch.channel(shape, min_length, width, height, input, output)
-sch.channel(junction_node,
-            output_node,
-            phase='output'
-            )
-sch.channel(continuous_node,
-            junction_node,
-            phase='continuous'
-            )
-sch.channel(dispersed_node,
-            junction_node,
-            phase='dispersed'
-            )
+sch.channel(junction_node, output_node, phase='output')
+sch.channel(continuous_node, junction_node, phase='continuous')
+sch.channel(dispersed_node, junction_node, phase='dispersed')
 
 #  sch.solve()
 print(sch.solve())
