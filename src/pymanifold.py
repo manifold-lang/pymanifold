@@ -6,6 +6,7 @@ import networkx as nx
 #  dReal SMT solver
 from dreal.symbolic import Variable, logical_and
 from dreal.api import CheckSatisfiability
+from OMPython import ModelicaSystem
 
 from src import constants
 import algorithms
@@ -54,6 +55,7 @@ class Schematic():
         # Add new node types and their validation method to this dict
         # to maintain consistent checking across all methods
         self.translation_strats = {'input': translate.translate_input,
+                                   'node': translate.translate_node,
                                    'output': translate.translate_output,
                                    't-junction': translate.translate_tjunc,
                                    'rectangle': translate.translate_channel
@@ -63,7 +65,8 @@ class Schematic():
         self.dg = nx.DiGraph()
 
     def validate_params(self, params: dict, component: str, name: str):
-        """TODO: Docstring for validate_params.
+        """Checks that the parameters provided to a primitive type definition are valid
+        i.e. that strings are actually string, numbers are actually ints or floats
 
         :param params dict: Dictionary containing all parameters and their cooresponding type
         :param component str: What primitive type this is checking, Node, Port, Channel, etc.
@@ -83,12 +86,28 @@ class Schematic():
             elif value == 'number':
                 # list of values that should all be positive numbers, in doing so also
                 # checks if its an int or float
+                if not isinstance(param, int) and not isinstance(param, float):
+                    raise TypeError("%s '%s' parameter '%s' must be int or float" %
+                                    (component, name, param))
+            elif value == 'negative number':
+                # list of values that should all be positive numbers, in doing so also
+                # checks if its an int or float
+                try:
+                    if param > 0:
+                        raise ValueError("%s '%s' parameter '%s' must be >= 0" %
+                                         (component, name, param))
+                except TypeError as e:
+                    raise TypeError("%s '%s' parameter '%s' must be int or float" %
+                                    (component, name, param))
+            elif value == 'positive number':
+                # list of values that should all be positive numbers, in doing so also
+                # checks if its an int or float
                 try:
                     if param < 0:
                         raise ValueError("%s '%s' parameter '%s' must be >= 0" %
                                          (component, name, param))
                 except TypeError as e:
-                    raise TypeError("%s '%s' parameter '%s' must be int" %
+                    raise TypeError("%s '%s' parameter '%s' must be int or float" %
                                     (component, name, param))
 
     def channel(self,
@@ -125,9 +144,9 @@ class Schematic():
 
         user_provided_params = {port_from: 'string',
                                 port_to: 'string',
-                                min_length: 'number',
-                                min_width: 'number',
-                                min_height: 'number',
+                                min_length: 'positive number',
+                                min_width: 'positive number',
+                                min_height: 'positive number',
                                 kind: 'string',
                                 phase: 'string'
                                 }
@@ -197,10 +216,10 @@ class Schematic():
                  ValueError if an input parameter has an invalid value
         """
         user_provided_params = {name: 'string',
-                                min_pressure: 'number',
-                                min_flow_rate: 'number',
-                                x: 'number',
-                                y: 'number',
+                                min_pressure: 'positive number',
+                                min_flow_rate: 'positive number',
+                                x: 'positive number',
+                                y: 'positive number',
                                 kind: 'string',
                                 fluid_name: 'string'
                                 }
@@ -255,8 +274,8 @@ class Schematic():
                  ValueError if an input parameter has an invalid value
         """
         user_provided_params = {name: 'string',
-                                x: 'number',
-                                y: 'number',
+                                x: 'positive number',
+                                y: 'positive number',
                                 kind: 'string'
                                 }
         # Checking that arguments are valid
@@ -325,12 +344,12 @@ class Schematic():
                  ValueError if an input parameter has an invalid value
         """
         user_provided_params = {name: 'string',
-                                min_pressure: 'number',
-                                min_flow_rate: 'number',
-                                x: 'number',
-                                y: 'number',
+                                min_pressure: 'positive number',
+                                min_flow_rate: 'positive number',
+                                x: 'positive number',
+                                y: 'positive number',
                                 voltage: 'number',
-                                current: 'number',
+                                current: 'positive number',
                                 kind: 'string',
                                 fluid_name: 'string'
                                 }
@@ -483,7 +502,6 @@ class Schematic():
             # Channel name is ch1, ch2, etc.
             channel_id = "ch" + str(idx)
             # Source is the same as port_from, but generated by Networkx
-            # TODO: Remove port_from and port_to
             manifold_ir["connections"][channel_id] = {"from": link_attribute_dict["source"],
                                                       "to": link_attribute_dict["target"],
                                                       "attributes": {}
@@ -527,3 +545,19 @@ class Schematic():
 
         with open(path, 'w') as outfile:
             json.dump(manifold_ir, outfile, separators=(',', ':'))
+
+    def to_modelica(self):
+        """Convert the schematic to a valid Modelica file
+        :returns: None
+        """
+        mod = ModelicaSystem("TJunctionSingleDrop.mo",
+                             "TJunctionSingleDrop",
+                             ["Modelica"]
+                             )
+        return mod.getQuantities()
+
+
+if __name__ == '__main__':
+    sch = Schematic([0, 0, 1, 1])
+    output = sch.to_modelica()
+    print(output)
