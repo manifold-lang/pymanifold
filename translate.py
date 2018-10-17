@@ -45,6 +45,16 @@ def translate_node(dg, name):
         exprs.append(algorithms.retrieve(dg, name, 'pressure') ==
                      logical_and(*output_pressure_formulas))
 
+    if algorithms.retrieve(dg, name, 'min_x'):
+        exprs.append(algorithms.retrieve(dg, name, 'x') ==
+                     algorithms.retrieve(dg, name, 'min_x'))
+    else:
+        exprs.append(algorithms.retrieve(dg, name, 'x') >= 0)
+    if algorithms.retrieve(dg, name, 'min_y'):
+        exprs.append(algorithms.retrieve(dg, name, 'y') ==
+                     algorithms.retrieve(dg, name, 'min_y'))
+    else:
+        exprs.append(algorithms.retrieve(dg, name, 'y') >= 0)
     # If parameters are provided by the user, then set the
     # their Variable equal to that value, otherwise make it greater than 0
     if algorithms.retrieve(dg, name, 'min_pressure'):
@@ -55,16 +65,6 @@ def translate_node(dg, name):
                      algorithms.retrieve(dg, name, 'min_pressure'))
     else:
         exprs.append(algorithms.retrieve(dg, name, 'pressure') > 0)
-
-    if algorithms.retrieve(dg, name, 'min_density'):
-        exprs.append(algorithms.retrieve(dg, name, 'x') ==
-                     algorithms.retrieve(dg, name, 'min_x'))
-        exprs.append(algorithms.retrieve(dg, name, 'y') ==
-                     algorithms.retrieve(dg, name, 'min_y'))
-    else:
-        exprs.append(algorithms.retrieve(dg, name, 'x') >= 0)
-        exprs.append(algorithms.retrieve(dg, name, 'y') >= 0)
-
     if algorithms.retrieve(dg, name, 'min_flow_rate'):
         exprs.append(algorithms.retrieve(dg, name, 'flow_rate') ==
                      algorithms.retrieve(dg, name, 'min_flow_rate'))
@@ -81,6 +81,11 @@ def translate_node(dg, name):
                      algorithms.retrieve(dg, name, 'min_density'))
     else:
         exprs.append(algorithms.retrieve(dg, name, 'density') > 0)
+
+    # To recursively traverse, call on all successor channels
+    for node_out in dg.succ[name]:
+        [exprs.append(val) for val in translation_strats[
+            algorithms.retrieve(dg, (name, node_out), 'kind')](dg, (name, node_out))]
     return exprs
 
 
@@ -100,7 +105,7 @@ def translate_input(dg, name):
         raise ValueError("Cannot have channels into input port %s" % name)
 
     # If input is a type of node, call translate node
-    translate_node(dg, name)
+    [exprs.append(val) for val in translate_node(dg, name)]
 
     # Calculate flow rate for this port based on pressure and channels out
     # if not specified by user
@@ -110,8 +115,8 @@ def translate_input(dg, name):
 
     # To recursively traverse, call on all successor channels
     for node_out in dg.succ[name]:
-        translation_strats[
-            algorithms.retrieve(dg, (name, node_out), 'kind')](dg, (name, node_out))
+        [exprs.append(val) for val in translation_strats[
+            algorithms.retrieve(dg, (name, node_out), 'kind')](dg, (name, node_out))]
     return exprs
 
 
@@ -217,8 +222,9 @@ def translate_channel(dg, name):
 
     # Channels do not have pressure because it decreases across channel
     # Call translate on the output to continue traversing the channel
-    translation_strats[algorithms.retrieve(dg,
-        algorithms.retrieve(dg, name, 'port_to'), 'kind')](dg, algorithms.retrieve(dg, name, 'port_to'))
+    [exprs.append(val) for val in translation_strats[algorithms.retrieve(dg,
+        algorithms.retrieve(dg, name, 'port_to'), 'kind')]\
+        (dg, algorithms.retrieve(dg, name, 'port_to'))]
     return exprs
 
 
@@ -356,10 +362,10 @@ def translate_tjunc(dg, name, crit_crossing_angle=0.5):
                                                   dispersed_node_name
                                                   ))
     # Call translate on output
-    translation_strats[algorithms.retrieve(dg,
-                                           output_node_name,
-                                           'kind'
-                                           )](dg, output_node_name)
+    [exprs.append(val) for val in translation_strats[algorithms.retrieve(dg,
+                                                                         output_node_name,
+                                                                         'kind'
+                                                                         )](dg, output_node_name)]
     return exprs
 
 

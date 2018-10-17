@@ -186,6 +186,14 @@ class Schematic():
                       'port_to': port_to
                       }
 
+        # If user provides values, put them into the attributes dictionary
+        if not min_width:
+            attributes['min_width'] = min_width
+        if not min_length:
+            attributes['min_length'] = min_length
+        if not min_height:
+            attributes['min_height'] = min_height
+
         # Create this edge in the graph
         self.dg.add_edge(*name)
 
@@ -256,6 +264,16 @@ class Schematic():
                       'min_y': y
                       }
 
+        # If user provides values, put them into the attributes dictionary
+        if not x:
+            attributes['min_x'] = x
+        if not y:
+            attributes['min_y'] = y
+        if not min_flow_rate:
+            attributes['min_flow_rate'] = min_flow_rate
+        if not min_pressure:
+            attributes['min_pressure'] = min_pressure
+
         # Create this node in the graph
         self.dg.add_node(name)
         # Add argument to attributes within NetworkX
@@ -311,6 +329,12 @@ class Schematic():
                       'y': Variable(name + '_y'),
                       'min_y': None
                       }
+
+        # If user provides values, put them into the attributes dictionary
+        if not x:
+            attributes['min_x'] = x
+        if not y:
+            attributes['min_y'] = y
 
         # Create this node in the graph
         self.dg.add_node(name)
@@ -420,7 +444,7 @@ class Schematic():
                         has_output = True
                         # There's an output, so call translate on input
                         # TODO: Output may not be connected to input, check for it
-                        self.exprs.append(*translate.translate_input(self.dg, name))
+                        [self.exprs.append(val) for val in translate.translate_input(self.dg, name)]
                         break
                 if not has_output:
                     raise ValueError('Schematic input %s has no output' % name)
