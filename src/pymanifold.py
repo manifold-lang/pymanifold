@@ -54,12 +54,13 @@ class Schematic():
 
         # Add new node types and their validation method to this dict
         # to maintain consistent checking across all methods
-        self.translation_strats = {'input': translate.translate_input,
-                                   'node': translate.translate_node,
-                                   'output': translate.translate_output,
-                                   't-junction': translate.translate_tjunc,
-                                   'rectangle': translate.translate_channel
-                                   }
+        self.translation_strats = dir(translate)
+        #  {'input': translate.translate_input,
+        #                             'node': translate.translate_node,
+        #                             'output': translate.translate_output,
+        #                             't-junction': translate.translate_tjunc,
+        #                             'rectangle': translate.translate_channel
+        #                             }
 
         # DiGraph that will contain all nodes and channels
         self.dg = nx.DiGraph()
@@ -138,6 +139,7 @@ class Schematic():
         """
         # Collection of the kinds for which there are methods to calculate their
         # channel resistance
+        # TODO: Create way to send type to translate_channel
         valid_kinds = ("rectangle")
 
         name = (port_from, port_to)
@@ -153,13 +155,15 @@ class Schematic():
         # Checking that arguments are valid
         if kind not in valid_kinds:
             raise ValueError("Valid channel kinds are: %s" % valid_kinds)
+        if kind == "rectangle":
+            kind = "channel"
 
         self.validate_params(user_provided_params, 'Channel', name)
 
         if (port_from, port_to) in self.dg.edges:
             raise ValueError("Channel already exists between these nodes %s" % (port_from, port_to))
-        if kind.lower() not in self.translation_strats.keys():
-            raise ValueError("kind must be either %s" % self.translation_strats.keys())
+        if 'translate_' + kind.lower() not in self.translation_strats:
+            raise ValueError("kind must be either %s" % self.translation_strats)
 
         # Add the information about that connection to another dict
         # There's extra parameters in here than in the arguments because they
@@ -228,8 +232,8 @@ class Schematic():
 
         if name in self.dg.nodes:
             raise ValueError("Must provide a unique name")
-        if kind.lower() not in self.translation_strats.keys():
-            raise ValueError("kind must be either %s" % self.translation_strats.keys())
+        if 'translate_' + kind.lower() not in self.translation_strats:
+            raise ValueError("kind must be either %s" % self.translation_strats)
 
         # Initialize fluid properties
         fluid_properties = Fluid(fluid_name)
@@ -283,8 +287,8 @@ class Schematic():
 
         if name in self.dg.nodes:
             raise ValueError("Must provide a unique name")
-        if kind.lower() not in self.translation_strats.keys():
-            raise ValueError("kind must be either %s" % self.translation_strats.keys())
+        if 'translate_' + kind.lower() not in self.translation_strats:
+            raise ValueError("kind must be either %s" % self.translation_strats)
 
         # Ports are stored with nodes because ports are just a specific type of
         # node that has a constant flow rate only accept ports of the right
@@ -358,8 +362,8 @@ class Schematic():
 
         if name in self.dg.nodes:
             raise ValueError("Must provide a unique name")
-        if kind.lower() not in self.translation_strats.keys():
-            raise ValueError("kind must be either %s" % self.translation_strats.keys())
+        if kind.lower() not in self.translation_strats:
+            raise ValueError("kind must be either %s" % self.translation_strats)
 
         # Initialize fluid properties
         fluid_properties = Fluid(fluid_name)
@@ -414,8 +418,10 @@ class Schematic():
                 for x, y in self.dg.nodes(data=True):
                     if y['kind'] == 'output':
                         has_output = True
+                        translation_command = 'translate.translate_' + kind + '(self.dg, name)'
+                        eval(translation_command)
                         # Input has output, so call translate on input
-                        [self.exprs.append(val) for val in self.translation_strats[kind](self.dg, name)]
+        #  [self.exprs.append(val) for val in self.translation_strats[kind](self.dg, name)]
                 if not has_output:
                     raise ValueError('Schematic input %s has no output' % name)
         if not has_input:

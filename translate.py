@@ -330,7 +330,7 @@ def translate_tjunc(dg, name, crit_crossing_angle=0.5):
                      epsilon,
                      algorithms.retrieve(dg, dispersed_node_name, 'flow_rate'),
                      algorithms.retrieve(dg, continuous_node_name, 'flow_rate')
-                 ))
+                     ))
 
     # Assert critical angle is <= calculated angle
     cosine_squared_theta_crit = math.cos(math.radians(crit_crossing_angle))**2
@@ -365,6 +365,8 @@ def translate_tjunc(dg, name, crit_crossing_angle=0.5):
 
 translation_strats = {'input': translate_input,
                       'output': translate_output,
+                      'node': translate_node,
+                      'channel': translate_channel,
                       't-junction': translate_tjunc,
                       'rectangle': translate_channel
                       }
