@@ -33,7 +33,7 @@ docker pull jsreid13/pymanifold:latest
 ```
 Run the single\_channel\_test,py script within this image using:
 ```
-docker container run -it --rm -v $(pwd):/tmp -w /tmp jsreid13/pymanifold:latest python3 tests/single_channel_test.py
+docker container run -it --rm -v $(pwd):/tmp -v $(pwd)/src:/tmp/src -w /tmp -e PYTHONPATH=/tmp pymanifold:pip python3 tests/t_junction_test.py
 ```
 _Note: You need to run this command in your terminal while in the root of this repository_
 
@@ -56,9 +56,6 @@ continuous_node = 'continuous'
 dispersed_node = 'dispersed'
 output_node = 'out'
 junction_node = 't_j'
-min_channel_length = 1
-min_channel_width = 1
-min_channel_height = 0.001
 
 # Continuous and output node should have same flow rate
 # syntax: sch.port(name, design[, pressure, flow_rate, density, X_pos, Y_pos])
@@ -70,14 +67,29 @@ sch.port(output_node, 'output')
 sch.node(junction_node, 1, 0, kind='t-junction')
 
 # syntax: sch.channel(shape, min_length, width, height, input, output)
-sch.channel(junction_node, output_node, phase='output')
-sch.channel(continuous_node, junction_node, phase='continuous')
-sch.channel(dispersed_node, junction_node, phase='dispersed')
+sch.channel(junction\_node, output\_node, phase='output')
+sch.channel(continuous\_node, junction\_node, phase='continuous')
+sch.channel(dispersed\_node, junction\_node, phase='dispersed')
 
 print(sch.solve())
-
-# Returns a model object from dReal with dictionary like mapping of each variable to a range of values
 ```
+Output:
+continuous\_pressure : [-1.348269851146736731e+308, -1.348269851146736731e+308]
+continuous\_flow\_rate : [0, 0]
+continuous\_x : [4.5, 5.5]
+continuous\_y : [4.5, 5.5]
+dispersed\_pressure : [-3.370674627866841828e+307, -3.370674627866841828e+307]
+dispersed\_flow\_rate : [0, 0]
+dispersed\_x : [4.5, 5.5]
+dispersed\_y : [4.5, 5.5]
+out\_x : [4.5, 5.5]
+out\_y : [4.5, 5.5]
+t\_j\_x : [4.5, 5.5]
+t\_j\_y : [4.5, 5.5]
+continuous\_t\_j\_length : [-1.348269851146736731e+308, -1.348269851146736731e+308]
+continuous\_t\_j\_width : [0, 0]
+dispersed\_t\_j\_length : [-0, 0]
+dispersed\_t\_j\_width : [-1.123558209288947243e+308, -1.123558209288947243e+308]
 
 ## Development
 
