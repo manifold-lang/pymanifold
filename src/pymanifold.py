@@ -397,7 +397,7 @@ class Schematic():
 
     def translate_schematic(self):
         """Validates that each node has the correct input and output
-        conditions met then translates it into pysmt syntax
+        conditions met then translates it into dReal syntax
         Generates SMT formulas to simulate specialized nodes like T-junctions
         and stores them in self.exprs
         """
@@ -418,10 +418,10 @@ class Schematic():
                 for x, y in self.dg.nodes(data=True):
                     if y['kind'] == 'output':
                         has_output = True
-                        translation_command = 'translate.translate_' + kind + '(self.dg, name)'
-                        eval(translation_command)
-                        # Input has output, so call translate on input
-        #  [self.exprs.append(val) for val in self.translation_strats[kind](self.dg, name)]
+                        # There's an output, so call translate on input
+                        # TODO: Output may not be connected to input, check for it
+                        self.exprs.append(*translate.translate_input(self.dg, name))
+                        break
                 if not has_output:
                     raise ValueError('Schematic input %s has no output' % name)
         if not has_input:
@@ -438,7 +438,7 @@ class Schematic():
 
         :param bool show: If true then the full SMT formula that was created is
                           printed
-        :returns: pySMT model showing the values for each of the parameters
+        :returns: dReal model showing the values for each of the parameters
         """
         formula = logical_and(*self.exprs)
         # Prints the generated formula in full, remove serialize for shortened
@@ -456,7 +456,7 @@ class Schematic():
 
     def solve(self, show=False):
         """Create the SMT2 equation for this schematic outlining the design
-        of a microfluidic circuit and use Z3 to solve it using pysmt
+        of a microfluidic circuit and use dReal to solve it
 
         :param bool show: If true then the full SMT formula that was created is
                           printed
