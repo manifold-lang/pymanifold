@@ -19,7 +19,7 @@ sch.port(dispersed_node, 'input', min_pressure=1, fluid_name='water')
 sch.port(output_node, 'output')
 
 # syntax: sch.node(name, X_pos, Y_pos, kind='node')
-sch.node(junction_node, 1, 0, kind='t-junction')
+sch.node(junction_node, 1, 0, kind='tjunc')
 
 # syntax: sch.channel(shape, min_length, width, height, input, output)
 sch.channel(junction_node, output_node, phase='output')

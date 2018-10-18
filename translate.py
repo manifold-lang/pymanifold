@@ -373,6 +373,6 @@ translation_strats = {'input': translate_input,
                       'output': translate_output,
                       'node': translate_node,
                       'channel': translate_channel,
-                      't-junction': translate_tjunc,
+                      'tjunc': translate_tjunc,
                       'rectangle': translate_channel
                       }
