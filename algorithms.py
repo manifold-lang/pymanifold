@@ -182,10 +182,11 @@ def calculate_port_flow_rate(dg, port_name):
     """
     areas = []
     port_pressure = retrieve(dg, port_name, 'pressure')
-    port_density = retrieve(dg, port_name, 'pressure')
+    port_density = retrieve(dg, port_name, 'density')
+    port_flow_rate = retrieve(dg, port_name, 'flow_rate')
     # Calculate cross sectional area of all channels flowing into this port
     for port_out in dg.succ[port_name]:
-        areas.append(retrieve(dg, (port_name, port_out), 'length') *
+        areas.append(retrieve(dg, (port_name, port_out), 'height') *
                      retrieve(dg, (port_name, port_out), 'width')
                      )
     # Add together all these areas if multiple exist
@@ -194,4 +195,4 @@ def calculate_port_flow_rate(dg, port_name):
     else:
         areas = [a + b for a, b in zip(areas, areas[1:])]
         total_area = logical_and(*areas)
-    return (total_area * (((2 * port_pressure) / port_density) ** 0.5))
+    return (port_flow_rate ** 2 == (total_area ** 2) * ((2 * port_pressure) / port_density))

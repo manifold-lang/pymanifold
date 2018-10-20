@@ -3,5 +3,8 @@ src/*
 dist
 build
 src/__pycache__
+__pycache__
 pymanifold.egg-info
 .tox
+TJunctionSingleDrop.mo
+tests/dreal_test.py

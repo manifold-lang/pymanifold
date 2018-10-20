@@ -117,6 +117,8 @@ class Schematic():
                 min_length=False,
                 min_width=False,
                 min_height=False,
+                min_depth=False,
+                min_resolution=False,
                 kind='rectangle',
                 phase='None'
                 ):
@@ -149,6 +151,8 @@ class Schematic():
                                 min_length: 'positive number',
                                 min_width: 'positive number',
                                 min_height: 'positive number',
+                                min_depth: 'positive number',
+                                min_resolution: 'positive number',
                                 kind: 'string',
                                 phase: 'string'
                                 }
@@ -177,6 +181,10 @@ class Schematic():
                       'min_width': min_width,
                       'height': Variable('_'.join([*name, 'height'])),
                       'min_height': min_height,
+                      'depth': Variable('_'.join([*name, 'depth'])),
+                      'min_depth': min_depth,
+                      'resolution': Variable('_'.join([*name, 'resolution'])),
+                      'min_resolution': min_depth,
                       'flow_rate': Variable('_'.join([*name, 'flow_rate'])),
                       'droplet_volume': Variable('_'.join([*name, 'droplet_volume'])),
                       'viscosity': Variable('_'.join([*name, 'viscosity'])),
@@ -331,9 +339,9 @@ class Schematic():
                       }
 
         # If user provides values, put them into the attributes dictionary
-        if not x:
+        if x:
             attributes['min_x'] = x
-        if not y:
+        if y:
             attributes['min_y'] = y
 
         # Create this node in the graph
@@ -437,16 +445,15 @@ class Schematic():
                 has_input = True
                 # first ensure that it has an output
                 has_output = False
-                # TODO: Need to create list of output + input nodes to see if
-                #       they connect
+                # TODO: Need to create list of output + input nodes to see if they connect
                 for x, y in self.dg.nodes(data=True):
                     if y['kind'] == 'output':
-                        has_output = True
                         # There's an output, so call translate on input
-                        # TODO: Output may not be connected to input, check for it
-                        [self.exprs.append(val) for val in translate.translate_input(self.dg, name)]
-                        break
-                if not has_output:
+                        has_output = True
+                # TODO: Output may not be connected to input, check for it
+                if has_output:
+                    [self.exprs.append(val) for val in translate.translate_input(self.dg, name)]
+                else:
                     raise ValueError('Schematic input %s has no output' % name)
         if not has_input:
             raise ValueError('Schematic has no input')
@@ -472,7 +479,7 @@ class Schematic():
             print(formula)
         # Return None if not solvable, returns a dict-like structure giving the
         # range of values for each Variable
-        model = CheckSatisfiability(formula, 1)
+        model = CheckSatisfiability(formula, 10)
         if model:
             return model
         else:
