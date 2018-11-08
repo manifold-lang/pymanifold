@@ -9,13 +9,19 @@ from dreal.api import CheckSatisfiability
 from OMPython import ModelicaSystem
 
 from src import constants
-import algorithms
+#  import algorithms
 import translate
 
 
 class Fluid():
+    """This is used to retrieve the parameters of common fluids used in
+    microfluidics from constants.py so researchers can simply provide the fluid
+    name as a parameter instead of several properties of the fluid
+    """
 
     def __init__(self, fluid):
+        """The properties stored in constants.py are retrieved here in the constructor
+        """
         self.min_density = constants.FluidProperties().getDensity(fluid)
         self.min_resistivity = constants.FluidProperties().getResistivity(fluid)
         self.min_viscosity = constants.FluidProperties().getViscosity(fluid)
@@ -27,12 +33,18 @@ class Fluid():
                               min_pressure=False,
                               min_resistivity=False
                               ):
+        """If the user wants to tweek the values of the fluids manually, call this method
+        TODO: Currently all parameters have to be provided, make it so only the ones
+              provided are updated
+        """
         self.min_density = min_density
         self.min_resistivity = min_resistivity
         self.min_viscosity = min_viscosity
         self.min_pressure = min_pressure
 
     def __repr__(self):
+        """Representation of this object is all of the parameters together in a tuple
+        """
         return repr((self.min_density, self.min_resistivity, self.min_viscosity, self.min_pressure))
 
 
@@ -43,11 +55,11 @@ class Schematic():
     it is still solvable
     """
     def __init__(self, dim):
-        """Store the connections as a dictionary to form a graph where each
-        value is a list of all nodes/ports that a node flows out to, store
+        """Store the connections as a directed graph in NetworkX where each node
+        is a point where fluid enters the channel or where two channels meet,
         information about each of the channels in a separate dictionary
 
-        :param list dim: dimensions of the chip, [X_min, Y_min, X_max, X_min] (m)
+        :param list dim: dimensions of the overall chip, [X_min, Y_min, X_max, X_min] (m)
         """
         self.exprs = []
         self.dim = dim
@@ -141,7 +153,6 @@ class Schematic():
         """
         # Collection of the kinds for which there are methods to calculate their
         # channel resistance
-        # TODO: Create way to send type to translate_channel
         valid_kinds = ("rectangle")
 
         name = (port_from, port_to)
@@ -157,6 +168,7 @@ class Schematic():
                                 phase: 'string'
                                 }
         # Checking that arguments are valid
+        # TODO: Modify this to make it work for other channel shapes
         if kind not in valid_kinds:
             raise ValueError("Valid channel kinds are: %s" % valid_kinds)
         if kind == "rectangle":
@@ -429,7 +441,7 @@ class Schematic():
 
     def translate_schematic(self):
         """Validates that each node has the correct input and output
-        conditions met then translates it into dReal syntax
+        conditions met then translates it into SMT solver syntax
         Generates SMT formulas to simulate specialized nodes like T-junctions
         and stores them in self.exprs
         """
@@ -464,7 +476,7 @@ class Schematic():
         return
 
     def invoke_backend(self, _show):
-        """Combine all of the SMT expressions into one expression to sent to Z3
+        """Combine all of the SMT expressions into one expression to sent to dReal
         solver to determine solvability
 
         :param bool show: If true then the full SMT formula that was created is
@@ -497,14 +509,14 @@ class Schematic():
         return self.invoke_backend(show)
 
     def to_json(self, path=os.getcwd() + 'test.json'):
-        """Converts designed schematic to a json file following Manifold IR grammar
+        """Converts designed schematic to a json file following Manifold's intermediate
+        representation syntax to work with other parts of Manifold if needed
 
         :param str path: Path to save the json file to on the computer
         """
         nx_json = nx.readwrite.json_graph.node_link_data(self.dg)
         output = self.solve()
         dreal_output = {}
-        # start at the third value, take every third and fourth which will be the range of values
         for name, interval in output.items():
             value = (interval.lb(), interval.ub())
             if sys.float_info.max in value:
