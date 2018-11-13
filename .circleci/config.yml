@@ -15,7 +15,7 @@ jobs:
       # documented at https://circleci.com/docs/2.0/circleci-images/
       # - image: circleci/postgres:9.4
 
-    working_directory: ~/repo
+    working_directory: /home
 
     steps:
       - checkout
@@ -49,7 +49,7 @@ jobs:
           command: |
             # . venv/bin/activate
             mkdir test-reports
-            pytest tests/ --junitxml=test-reports/junit.xml
+            pytest --junitxml=test-reports/junit.xml
 
       - store_test_results:
           path: test-reports
