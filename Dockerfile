@@ -17,3 +17,4 @@ RUN wget -q http://build.openmodelica.org/apt/openmodelica.asc -O- | apt-key add
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY tests ./
+COPY src/pymanifold.py ./
