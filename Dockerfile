@@ -4,9 +4,9 @@ MAINTAINER jsreid13@gmail.com
 WORKDIR /home
 
 RUN apt update \
-    && apt install -y --no-install-recommends wget \
-	&& wget https://bootstrap.pypa.io/get-pip.py \
-	&& python3 get-pip.py
+    && apt install -y --no-install-recommends wget git
+RUN wget https://bootstrap.pypa.io/get-pip.py 
+RUN python3 get-pip.py
 # Install OpenModellica
 RUN for deb in deb deb-src; do echo "$deb http://build.openmodelica.org/apt `awk -F"[)(]+" '/VERSION=/ {print $2}' /etc/os-release | awk '{print $1}' | awk '{ print tolower($0) }'` stable"; done | tee /etc/apt/sources.list.d/openmodelica.list
 RUN wget -q http://build.openmodelica.org/apt/openmodelica.asc -O- | apt-key add - \
