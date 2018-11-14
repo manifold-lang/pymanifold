@@ -1,4 +1,16 @@
 # pymanifold
+
+<table>
+<tr>
+  <td>Build Status</td>
+  <td>
+    <a href="https://circleci.com/gh/manifold-lang/pymanifold/tree/master">
+    <img src="https://circleci.com/gh/manifold-lang/pymanifold/tree/master.svg?style=svg" alt="CircleCI build status" />
+    </a>
+  </td>
+</tr>
+</table>
+
 Python implementation of the Manifold microfluidic simulation language
 
 This library allows you to design a microfluidic circuit as a schematic consisting of:
@@ -67,29 +79,55 @@ sch.port(output_node, 'output')
 sch.node(junction_node, 1, 0, kind='t-junction')
 
 # syntax: sch.channel(shape, min_length, width, height, input, output)
-sch.channel(junction\_node, output\_node, phase='output')
-sch.channel(continuous\_node, junction\_node, phase='continuous')
-sch.channel(dispersed\_node, junction\_node, phase='dispersed')
+sch.channel(junction_node, output_node, phase='output')
+sch.channel(continuous_node, junction_node, phase='continuous')
+sch.channel(dispersed_node, junction_node, phase='dispersed')
 
 print(sch.solve())
 ```
-Output:
-continuous\_pressure : [-1.348269851146736731e+308, -1.348269851146736731e+308]
-continuous\_flow\_rate : [0, 0]
-continuous\_x : [4.5, 5.5]
-continuous\_y : [4.5, 5.5]
-dispersed\_pressure : [-3.370674627866841828e+307, -3.370674627866841828e+307]
-dispersed\_flow\_rate : [0, 0]
-dispersed\_x : [4.5, 5.5]
-dispersed\_y : [4.5, 5.5]
-out\_x : [4.5, 5.5]
-out\_y : [4.5, 5.5]
-t\_j\_x : [4.5, 5.5]
-t\_j\_y : [4.5, 5.5]
-continuous\_t\_j\_length : [-1.348269851146736731e+308, -1.348269851146736731e+308]
-continuous\_t\_j\_width : [0, 0]
-dispersed\_t\_j\_length : [-0, 0]
-dispersed\_t\_j\_width : [-1.123558209288947243e+308, -1.123558209288947243e+308]
+Output:\
+continuous_viscosity : [4.494232837155789769e+307, 4.494232837155789769e+307]\
+continuous_pressure : [1, 1]\
+continuous_flow_rate : [1.518258991506101335e-158, 1.518258991506101538e-158]\
+continuous_density : [1.797693134862315708e+308, 1.797693134862315708e+308]\
+continuous_x : [8.281615407309315018e-12, 9.937377602372895258e-12]\
+continuous_y : [5, 5.000000000003019807]\
+dispersed_viscosity : [4.494232837155789769e+307, 4.494232837155789769e+307]\
+dispersed_pressure : [1, 1]\
+dispersed_flow_rate : [2.101318454051882251e-158, 2.101318454051882655e-158]\
+dispersed_density : [1.35216994135785263e+308, 1.35216994135785263e+308]\
+dispersed_x : [4.999999999996980193, 5]\
+dispersed_y : [9.999999999996980193, 10]\
+out_viscosity : [4.494232837155789769e+307, 4.494232837155789769e+307]\
+out_pressure : [1.797693134862315708e+308, 1.797693134862315708e+308]\
+out_flow_rate : [3.619577445557983788e-158, 3.619577445557984193e-158]\
+out_density : [3.370674627866841329e+307, 3.370674627866841329e+307]\
+out_x : [2.500406901035603369, 2.500406901037877105]\
+out_y : [7.499594818069040159, 7.499594818071313895]\
+t_j_pressure : [1.797693134862315509e+308, 1.797693134862315509e+308]\
+t_j_viscosity : [4.494232837155789769e+307, 4.494232837155789769e+307]\
+t_j_density : [3.370674627866841329e+307, 3.370674627866841329e+307]\
+t_j_x : [3.31275985767466778e-12, 6.331823954042192781e-12]\
+t_j_y : [4.999999999993668176, 4.999999999996687983]\
+t_j_out_width : [0.4993559777345346617, 0.4993559777345347173]\
+t_j_out_height : [0.0003451038031080025511, 0.0003451038031080026053]\
+t_j_out_flow_rate : [3.619577445557983788e-158, 3.619577445557984193e-158]\
+t_j_out_droplet_volume : [1.741515224397868536e+308, 1.741515224397868536e+308]\
+t_j_out_resistance : [-1.741515224397868536e+308, -1.741515224397868536e+308]\
+continuous_t_j_length : [6.624617698794350717e-12, 6.624617698794351525e-12]\
+continuous_t_j_width : [0.4993559777345346617, 0.4993559777345347173]\
+continuous_t_j_height : [0.0003451038031080025511, 0.0003451038031080026053]\
+continuous_t_j_flow_rate : [1.518258991506101335e-158, 1.518258991506101538e-158]\
+continuous_t_j_viscosity : [4.494232837155789769e+307, 4.494232837155789769e+307]\
+continuous_t_j_resistance : [1.741515224397868536e+308, 1.741515224397868536e+308]\
+dispersed_t_j_length : [7.071067811865476394, 7.071067811865477282]\
+dispersed_t_j_width : [0.5006598565867919071, 0.5006598565867920181]\
+dispersed_t_j_height : [0.0003451038031080025511, 0.0003451038031080026053]\
+dispersed_t_j_flow_rate : [2.101318454051882251e-158, 2.101318454051882655e-158]\
+dispersed_t_j_viscosity : [4.494232837155789769e+307, 4.494232837155789769e+307]\
+dispersed_t_j_resistance : [1.797693134862315708e+308, 1.797693134862315708e+308]\
+epsilon : [1.685337313933419667e+307, 1.685337313933419667e+307]\
+epsilon : [1.797693134862315708e+308, 1.797693134862315708e+308]
 
 ## Development
 
