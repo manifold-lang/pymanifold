@@ -9,3 +9,7 @@ sch.channel('in', 'middle node', min_length=2, min_width=0.9)
 sch.channel('middle node', 'out', min_width=0.9)
 model = sch.solve(show=True)
 print(model)
+
+
+def test_answer():
+    assert model != "No solution found"
