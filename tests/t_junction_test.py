@@ -27,4 +27,9 @@ sch.channel(continuous_node, junction_node, phase='continuous')
 sch.channel(dispersed_node, junction_node, phase='dispersed')
 
 #  sch.solve()
-print(sch.solve())
+model = sch.solve()
+print(model)
+
+
+def test_answer():
+    assert model != "No solution found"

@@ -10,3 +10,7 @@ print(model)
 # change the computer location below to set where you want the json data to go
 #  sch.to_json("Insert your file location here")
 #  sch.to_json()
+
+
+def test_answer():
+    assert model != "No solution found"
