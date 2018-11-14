@@ -14,8 +14,8 @@ min_channel_height = 0.001
 
 # Continuous and output node should have same flow rate
 # syntax: sch.port(name, design[, pressure, flow_rate, density, X_pos, Y_pos])
-sch.port(continuous_node, 'input', min_pressure=1, fluid_name='mineraloil')
-sch.port(dispersed_node, 'input', min_pressure=1, fluid_name='water')
+sch.port(continuous_node, 'input', min_pressure=1) #, fluid_name='mineraloil')
+sch.port(dispersed_node, 'input', min_pressure=1) #, fluid_name='water')
 sch.port(output_node, 'output')
 
 # syntax: sch.node(name, X_pos, Y_pos, kind='node')
@@ -27,7 +27,7 @@ sch.channel(continuous_node, junction_node, phase='continuous')
 sch.channel(dispersed_node, junction_node, phase='dispersed')
 
 #  sch.solve()
-model = sch.solve()
+model = sch.solve(show=True)
 print(model)
 
 
