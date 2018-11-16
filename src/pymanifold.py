@@ -8,9 +8,7 @@ from dreal.symbolic import Variable, logical_and
 from dreal.api import CheckSatisfiability
 from OMPython import ModelicaSystem
 
-from src import constants
-#  import algorithms
-import translate
+from src import constants, translate
 
 
 class Fluid():

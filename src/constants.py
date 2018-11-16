@@ -1,3 +1,4 @@
+# May want to make it a text file so its easier
 class FluidProperties():
 
     PROPERTIES = {"default": [False, False, False],
