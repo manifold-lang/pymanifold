@@ -2,6 +2,7 @@ import math
 import networkx as nx
 from src import algorithms
 from dreal.symbolic import Variable, logical_and
+from dreal import if_then_else
 
 
 def translate_chip(dg, name, dim):
@@ -393,11 +394,238 @@ def translate_tjunc(dg, name, crit_crossing_angle=0.5):
                                                                          )](dg, output_node_name)]
     return exprs
 
+def translate_ep_cross(dg, name, fluid_name = 'default'):
+    """Create SMT expressions for an electrophoretic cross
+    :param str name: the name of the junction node in the electrophoretic cross
+    :returns: None -- no issues with translating channel parameters to SMT
+    :raises: ValueError if the analyte_properties are not defined properly
+             TypeError if the analyte_properties are not floats or ints
+    """
+
+    # work in progress
+    exprs = []
+
+	# Validate input
+    if dg.size(name) != 4:
+        raise ValueError("Electrophoretic Cross %s must have 4 connections" % name)
+
+	# Electrophoretic Cross is a type of node, so call translate node
+    translate_node(dg, name)
+
+	# Because it's done in translate_tjunc
+    ep_cross_node_name = name
+
+	# figure out which nodes are for sample injection and which are for separation channel
+	# assume single input node, 3 output nodes, one junction node
+    # assume separation and tail channels are specified by user
+    phases = nx.get_edge_attributes(dg, 'phase')
+    for edge, phase in phases.items():
+        # assuming only one separation channel, and only 1 tail channel
+        if phase == 'separation':
+            separation_channel_name = edge
+            anode_node_name = edge[1]
+        elif phase == 'tail':
+            tail_channel_name = edge
+            cathode_node_name = edge[ edge[0] == ep_cross_node_name ]  # returns whichever tuple element is NOT the ep_cross node
+
+    # is there a better way to do this?
+    node_kinds = nx.get_node_attributes(dg, 'kind')
+    for node, kind in node_kinds.items():
+        if node not in separation_channel_name and node not in tail_channel_name:
+            if kind == 'input':
+                injection_channel_name = (node, ep_cross_node_name)
+                injection_node_name = node  # necessary?
+            elif kind == 'output':
+                waste_channel_name = (ep_cross_node_name, node)
+                waste_node_name = node  # necessary?
+
+    # assert dimensions:
+    # assert width and height of tail channel to be equal to separation channel
+    exprs.append(algorithms.retrieve(dg, tail_channel_name, 'width') ==
+                algorithms.retrieve(dg, separation_channel_name, 'width'))
+    exprs.append(algorithms.retrieve(dg, tail_channel_name, 'height') ==
+                algorithms.retrieve(dg, separation_channel_name, 'height'))
+
+    # assert width and height of injection channel to be equal to waste channel
+    exprs.append(algorithms.retrieve(dg, injection_channel_name, 'width') ==
+                algorithms.retrieve(dg, waste_channel_name, 'width'))
+    exprs.append(algorithms.retrieve(dg, injection_channel_name, 'height') ==
+                algorithms.retrieve(dg, waste_channel_name, 'height'))
+
+    # assert height of separation channel and injection channel are same
+    exprs.append(algorithms.retrieve(dg, injection_channel_name, 'height') ==
+                 algorithms.retrieve(dg, separation_channel_name, 'height'))
+
+
+    # electric field
+    E = Variable('E')
+    exprs.append(E == algorithms.calculate_electric_field(dg, anode_node_name, cathode_node_name))
+    # only works if cathode is an input?  only works for paths that are true in directed graph
+
+    # assume that the analyte parameters were included in the injection port
+    # need to validate that the data exists?
+
+    D = algorithms.retrieve(dg, injection_node_name, 'analyte_diffusivities')
+    C0 = algorithms.retrieve(dg, injection_node_name, 'analyte_initial_concentrations')
+    q = algorithms.retrieve(dg, injection_node_name, 'analyte_charges')
+    r = algorithms.retrieve(dg, injection_node_name, 'analyte_radii')
+
+    analyte_properties = {'analyte_diffusivities': D,
+                          'analyte_initial_concentrations': C0,
+                          'analyte_charges': q,
+                          'analyte_radii': r}
+
+    for property_name, values in analyte_properties.items():
+        # check if something is defined, otherwise should be set to false
+        if not values:
+            raise ValueError('No values defined for %s in electrophoretic cross node %s'
+                %(property_name, ep_cross_node_name) )
+
+        # make sure all the values are either ints or floats
+        if not all(isinstance(x, (int, float)) for x in values):
+            raise TypeError("%s values in electrophoretic cross node '%s' must be numbers" %
+                            (property_name, ep_cross_node_name))
+
+    # n = number of analytes
+    n = len(D)
+    for property_name, values in analyte_properties.items():
+        # check that they all have the same number of values
+        n_to_check = len(values)
+
+        if not (n_to_check == n):
+            raise ValueError("Expecting %s values, and found %s for %s in node: '%s'"
+                             %(n, n_to_check, property_name, ep_cross_node_name))
+
+    delta = algorithms.retrieve(dg, separation_channel_name, 'min_sampling_rate')
+    x_detector = algorithms.retrieve(dg, separation_channel_name, 'x_detector')
+
+
+    # These are currently set as parameters to the node function
+    # all are constants, numbers between 0 and 1
+    # brief descriptions:
+        # lower c, more discernable concentration peaks
+        # higher p, any given conc. peak must be higher (closer to max conc.)
+        # qf is arbitrary, rule of thumb qf = 0.9 (called q in Stephen Chou's paper)
+    c = algorithms.retrieve(dg, ep_cross_node_name, 'c')
+    p = algorithms.retrieve(dg, ep_cross_node_name, 'p')
+    qf = algorithms.retrieve(dg, ep_cross_node_name, 'qf')
+
+    mu = []
+    v = []
+    t_peak = []
+    t_min = []
+    W =  algorithms.retrieve(dg, injection_channel_name, 'width')
+
+    # for each analyte
+    for i in range(0, n):
+        # calculate mobility
+        mu.append( Variable('mu_' + str(i)) )
+        exprs.append( mu[i] == algorithms.calculate_mobility(dg, separation_channel_name, q[i], r[i]) )
+
+        # calculate velocity
+        v.append( Variable('v_' + str(i)) )
+        exprs.append( v[i] == algorithms.calculate_charged_particle_velocity(dg, mu[i], E) )
+
+        # calculate t_peak, initialize variables for t_min
+        t_peak.append( Variable('t_peak_' + str(i)) )
+        t_min.append( Variable('t_min_' + str(i)) )
+        exprs.append( t_peak[i] == x_detector/v[i] )
+
+
+    # detector position is somewhere along the separation channel
+    # assume x_detector ranges from 0 to length of channel
+    # to get absolute position of detector, add x_detector to ep_cross_node position
+    exprs.append( x_detector <= algorithms.retrieve(dg, separation_channel_name, 'length') )
+
+    # C_negligible is the minimum concentration level
+    # i.e. smallest concentration peak should be > C_negligible
+    C_negligible = Variable('C_negligible')
+    C_floor = Variable('C_floor')
+    sigma0 = Variable('sigma0')
+
+    # WARNING: THIS EQUATION IS WRONG
+    # the current expression for sigma0 is wrong, adding it only to test the other equations
+    # only have definition of sigma0 for round channels (sigma0 ~ r_channel/2.355)
+    exprs.append(sigma0 == W / (2*2.355))
+    exprs.append( C_floor == ( min(C0) / (sigma0 + (2*max(D) * x_detector / v[n-1])**0.5) ) )
+    exprs.append( C_negligible ==  p * C_floor )
+
+
+    diff = []
+    for i in range(0, n-1):
+
+        # constrain that time difference between peaks is large enough to be detected
+        exprs.append(t_peak[i] + delta < t_min[i])
+        exprs.append(t_peak[i] + delta < t_min[i+1])
+
+        # constrain t_min to be where derivative of concentration is 0
+        # if two adjacent peaks are close enough in height, then instead of using
+        # the differential eqn, can approximate Fi(tmin) = Fi+1(tmin)
+        # where i is the current analyte, and i+1 is the next analyte
+        # and F = C(x_detector), C is concentration
+        # quantify closeness of heights of peaks using the variable diff
+        diff.append( Variable('diff_' + str(i)) )
+        exprs.append( diff[i] == C0[i]/C0[i+1] * (D[i+1]*mu[i]/(D[i]*mu[i+1]))**0.5 )
+
+        # if 0.1 < diff < 10, then use expression Fi(tmin) = Fi+1(tmin)
+        # otherwise use expression dFi/dt (tmin) + dFi+1/dt (tmin) = 0
+        t_min_constraint_expression = if_then_else( logical_and(0.1 < diff[i], diff[i] < 10),
+            algorithms.calculate_concentration(dg, C0[i], D[i], W, v[i], x_detector, t_min[i]) -
+            algorithms.calculate_concentration(dg, C0[i+1], D[i+1], W, v[i+1], x_detector, t_min[i]),
+            (algorithms.calculate_concentration(dg, C0[i+1], D[i+1], W, v[i+1], x_detector, t_min[i])).Differentiate(t_min[i]) +
+            (algorithms.calculate_concentration(dg, C0[i+1], D[i+1], W, v[i+1], x_detector, t_min[i])).Differentiate(t_min[i])
+            )
+
+        exprs.append(t_min_constraint_expression == 0)
+
+        # an alternate way to define C_negligible is:
+        # C_negligible < p * min(Fi(t_peaki))
+        # this requires computing the concentration again, which is inefficient
+        # Wrote this expression just in case; this is the more exact expression
+        #  for C_negligible, in case the simpler one does not work for square
+        #  channels
+        # I don't know how to use the min function in dreal, so I figured an
+        #  equivalent but less efficient way to do it is just to ensure it is
+        #  less than Fi(t_peaki), for every i
+        # exprs.append( C_negligible < p*algorithms.calculate_concentration(dg, C0[i], D[i], W, v[i], x_detector, t_peak[i]))
+
+        # F(tmin, i)/(F(tmax, i)) <= c
+        # F(tmin, i)/F(tpeak, j) ~ ( Fi(tmin,i) + Fi+1(tmin, i) + (n-2)(1-q)/(n-3) ) / Fj(tpeak,j)
+        exprs.append(
+            (algorithms.calculate_concentration(dg, C0[i], D[i], W, v[i], x_detector, t_min[i]) +
+             algorithms.calculate_concentration(dg, C0[i+1], D[i+1], W, v[i+1], x_detector, t_min[i]) +
+             (n-2)*(1-qf)/(n-3) * C_negligible)
+             / (algorithms.calculate_concentration(dg, C0[i], D[i], W, v[i], x_detector, t_peak[i]))
+             <= c
+         )
+
+        # F(tmin, i)/(F(tmax, i+1)) <= c
+        exprs.append(
+            (algorithms.calculate_concentration(dg, C0[i], D[i], W, v[i], x_detector, t_min[i]) +
+             algorithms.calculate_concentration(dg, C0[i+1], D[i+1], W, v[i+1], x_detector, t_min[i]) +
+             (n-2)*(1-qf)/(n-3) * C_negligible)
+             / (algorithms.calculate_concentration(dg, C0[i+1], D[i+1], W, v[i+1], x_detector, t_peak[i+1]))
+             <= c
+            )
+
+    # Call translate on output - waste node
+    [exprs.append(val) for val in translation_strats[algorithms.retrieve(dg,
+                                                                         waste_node_name,
+                                                                         'kind'
+                                                                         )](dg, waste_node_name)]
+    # Call translate on output - anode
+    [exprs.append(val) for val in translation_strats[algorithms.retrieve(dg,
+                                                                         anode_node_name,
+                                                                         'kind'
+                                                                         )](dg, anode_node_name)]
+
+    return exprs
 
 translation_strats = {'input': translate_input,
                       'output': translate_output,
                       'node': translate_node,
                       'channel': translate_channel,
                       'tjunc': translate_tjunc,
-                      'rectangle': translate_channel
+                      'rectangle': translate_channel,
+                      'ep_cross': translate_ep_cross
                       }

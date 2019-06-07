@@ -195,4 +195,155 @@ def calculate_port_flow_rate(dg, port_name):
     else:
         areas = [a + b for a, b in zip(areas, areas[1:])]
         total_area = logical_and(*areas)
+
     return (port_flow_rate ** 2 == (total_area ** 2) * ((2 * port_pressure) / port_density))
+
+def find_path(dg, start_node, end_node):
+	""" Find a path between two nodes in the directed graph
+
+	:param str start_node: name of node from which path should start
+	:param str end_node: name of node where path should end
+	:returns: a list of node names, denoting the path from the start node to the end node
+            [start_node, node1, node2, ... , end_node]
+
+             ** returns None if no path is found
+	"""
+	path = [];
+	path = path + [start_node]
+
+	if start_node == end_node:
+		return path
+
+	else:
+		successor_nodes = list((dg.successors(start_node))) #successor_nodes = dict(dg[start_node]).keys();
+		#print(successor_nodes)
+		for node in successor_nodes:
+			if node not in path:
+				extended_path = find_path(dg, node, end_node)
+
+			if extended_path:
+				path = path + extended_path
+				return path
+	return None
+
+
+def calculate_electric_field(dg, anode_node_name, cathode_node_name):
+	"""Calculate the electric field strength between 2 nodes with applied voltage
+	Written for calculating the field between the anode and cathode in the ep_cross.
+	Assumes constant electric field: http://hyperphysics.phy-astr.gsu.edu/hbase/electric/elewor.html
+	E = V/d
+    Unit for electric field is V/m
+
+	:param str anode_node_name: Name of the node with the higher voltage
+	:param str cathode_node_name: Name of the node with the lower voltage
+	:returns: strength of the electric field between the two nodes
+	"""
+	voltage_1 = retrieve(dg, cathode_node_name, 'voltage')
+	voltage_2 = retrieve(dg, anode_node_name, 'voltage')
+	delta_voltage = voltage_2 - voltage_1
+
+	# find path between the 2 nodes (there should only be 1 possible path)
+	channel_path = dg.edges( find_path(dg, cathode_node_name, anode_node_name) )
+	if channel_path is None:
+		raise ValueError("No path found between %s and %s" %(cathode_node_name, anode_node_name))
+
+	# add check to make sure the path is a straight line?
+
+	# length = sum of all the lengths of the edges that form the path
+	length = 0
+	for edge in channel_path:
+		length = length + retrieve(dg, edge, 'length')
+
+	return (delta_voltage / length)
+
+
+def calculate_mobility(dg, channel_name, q, r):
+    """Calculate the mobility (mu) of a charged analyte
+    Based on Stephen Chou's paper, for an analyte that consists of spherical
+    charged polymer molecules:
+    mu_electrophoretic = q / (4*pi*eta*r),
+        where eta is the viscosity of the bulk fluid (q and r are defined below)
+
+    BUT in general
+    mu_electrophoretic = eps_r*eps_0*zeta/eta
+    where,
+        eta is the viscosity of the bulk fluid (Pa s)
+        eps_r is the dielectric constant of the dispersion medium
+        eps_0 is the permittivity of free space (~8.85e-12 C^2 N^-1 m^-2)
+        zeta is the zeta potential
+    https://en.wikipedia.org/wiki/Electrophoresis
+    this equation is not implemented used, but I wrote it here for future reference
+    (should it be implemented?)
+
+    mu = mu_electrophoretic + mu_electroosmotic
+    units of mu: m^2 / (V s)
+
+    :param str channel_name: Name of the channel
+    :param Variable/float? q: charge of a spherical polymer molecule
+    :param Variable/float? r: radius of a spherical polymer molecule
+    :returns: Flow rate determined from port pressure and area of
+              connected channels
+    """
+    # define way to put q and r in info for channel?, then retreive from channel
+    # instead of from function arguments?
+    eta = retrieve(dg, channel_name, 'viscosity')
+
+    # EP = electrophoretic
+    mu_EP = q / (4*math.pi*eta*r)
+
+    # EOF = electroosmotic
+    # from Stephen Chou's paper, rule of thumb
+    mu_EOF = 1.0 * 10**8
+
+    return mu_EP + mu_EOF
+
+def calculate_charged_particle_velocity(dg, mu, E):
+    """Calculate the velocity of an analyte based on the mobility (mu) and applied
+    electric field (E)
+    eqn from Stephen Chou's papers
+    velocity = mu * E
+    Unit for velocity is m/s
+
+    :param Variable/float? mu: mobility of the analyte
+    :param Variable E: applied electric field in the channel
+    :returns: velocity of the charged analyte moving in the electric field
+    """
+    # does this need to be a separate function?  it's really simple
+    return mu * E
+
+def erf_approximation(x):
+    """Calculate the approximate value of the error function (erf) at a given
+    value x.  This approximation is used because the SMT solver likely cannot
+    handle the exact function.
+    Used to calculate the concentration profile for the ep_cross
+
+    :param float/Variable? x: a number
+    :returns: erf(x)
+    """
+    # the coefficients for the approximate function, copied from Stephen Chou's paper
+    a1 = 0.278393
+    a2 = 0.230389
+    a3 = 0.000972
+    a4 = 0.078108
+
+    return (1 - (1 + a1*x + a2*x**2 + a3*x**3 + a4*x**4)**(-4) )
+
+def calculate_concentration(dg, C0, D, W, v, x, t):
+    """Calculate the concentration of a sample at time t (since being injected)
+    and at position x in the channel.
+    This is the equation for  rectangular channel, and assumes the sample is
+    originally confined to a width W.
+
+    :param float/Variable? C0: initial concentration of sample
+    :param float/Variable? D: diffusion coefficient of sample
+    :param Variable W: width of injection channel
+    :param Variable v: velocity of particles in sample, moving in the (separation) channel
+    :param Variable x: coordinate in channel (m)
+    :param Variable? t: time since injection (s)
+    :returns: concentration
+    """
+
+    # note the square root(will hopefully work with SMT solver)
+    return C0/2.0 * ( erf_approximation( (W - x + v*t)/(2*(D*t)**(0.5)) ) +
+                      erf_approximation( (W + x - v*t)/(2*(D*t)**(0.5)) )
+                 )

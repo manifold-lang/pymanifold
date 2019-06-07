@@ -25,6 +25,11 @@ class Fluid():
         self.min_viscosity = constants.FluidProperties().getViscosity(fluid)
         self.min_pressure = False
 
+        self.analyte_diffusivities = constants.FluidProperties().getDiffusivities(fluid)
+        self.analyte_initial_concentrations = constants.FluidProperties().getInitialConcentrations(fluid)
+        self.analyte_radii = constants.FluidProperties().getRadii(fluid)
+        self.analyte_charges = constants.FluidProperties().getCharges(fluid)
+
     def updateFluidProperties(self,
                               min_density=False,
                               min_viscosity=False,
@@ -130,7 +135,8 @@ class Schematic():
                 min_depth=False,
                 min_resolution=False,
                 kind='rectangle',
-                phase='None'
+                phase='None',
+                min_sampling_rate=1
                 ):
         """Create new connection between two nodes/ports with attributes
         consisting of the dimensions of the channel to be used to create the
@@ -163,7 +169,8 @@ class Schematic():
                                 min_depth: 'positive number',
                                 min_resolution: 'positive number',
                                 kind: 'string',
-                                phase: 'string'
+                                phase: 'string',
+                                min_sampling_rate: 'positive number'
                                 }
         # Checking that arguments are valid
         # TODO: Modify this to make it work for other channel shapes
@@ -177,7 +184,7 @@ class Schematic():
         if (port_from, port_to) in self.dg.edges:
             raise ValueError("Channel already exists between these nodes %s" % (port_from, port_to))
         if 'translate_' + kind.lower() not in self.translation_strats:
-            raise ValueError("kind must be either %s" % self.translation_strats)
+            raise ValueError("kind %s must be either %s" % ("translate_" + kind.lower(), self.translation_strats))
 
         # Add the information about that connection to another dict
         # There's extra parameters in here than in the arguments because they
@@ -201,7 +208,9 @@ class Schematic():
                       'resistance': Variable('_'.join([*name, 'resistance'])),
                       'phase': phase.lower(),
                       'port_from': port_from,
-                      'port_to': port_to
+                      'port_to': port_to,
+                      'x_detector': Variable('_'.join([*name, 'x_detector'])),
+                      'min_sampling_rate': min_sampling_rate
                       }
 
         # If user provides values, put them into the attributes dictionary
@@ -259,7 +268,7 @@ class Schematic():
         if name in self.dg.nodes:
             raise ValueError("Must provide a unique name")
         if 'translate_' + kind.lower() not in self.translation_strats:
-            raise ValueError("kind must be either %s" % self.translation_strats)
+            raise ValueError("kind %s must be either %s" % ("translate_" + kind.lower(), self.translation_strats))
 
         # Initialize fluid properties
         fluid_properties = Fluid(fluid_name)
@@ -279,7 +288,11 @@ class Schematic():
                       'x': Variable(name + '_x'),
                       'y': Variable(name + '_y'),
                       'min_x': x,
-                      'min_y': y
+                      'min_y': y,
+                      'analyte_diffusivities': fluid_properties.analyte_diffusivities,
+                      'analyte_initial_concentrations': fluid_properties.analyte_initial_concentrations,
+                      'analyte_radii': fluid_properties.analyte_radii,
+                      'analyte_charges': fluid_properties.analyte_charges
                       }
 
         # If user provides values, put them into the attributes dictionary
@@ -299,7 +312,8 @@ class Schematic():
             self.dg.nodes[name][key] = attr
         return
 
-    def node(self, name, x=False, y=False, kind='node'):
+    def node(self, name, x=False, y=False, kind='node', c=0.4, p=0.5, qf=0.9):
+        # TODO: Add ability to add features when this is  tjunc, same for channel
         """Create new node where fluids merge or split, kind of node (T-junction,
         Y-junction, cross, etc.) can be specified if not then a basic node
         connecting multiple channels will be created, units in brackets
@@ -316,7 +330,10 @@ class Schematic():
         user_provided_params = {name: 'string',
                                 x: 'positive number',
                                 y: 'positive number',
-                                kind: 'string'
+                                kind: 'string',
+                                c: 'positive number',
+                                p: 'positive number',
+                                qf: 'positive number'
                                 }
         # Checking that arguments are valid
         self.validate_params(user_provided_params, 'node', name)
@@ -324,7 +341,7 @@ class Schematic():
         if name in self.dg.nodes:
             raise ValueError("Must provide a unique name")
         if 'translate_' + kind.lower() not in self.translation_strats:
-            raise ValueError("kind must be either %s" % self.translation_strats)
+            raise ValueError("kind %s must be either %s" % ("translate_" + kind.lower(), self.translation_strats))
 
         # Ports are stored with nodes because ports are just a specific type of
         # node that has a constant flow rate only accept ports of the right
@@ -345,7 +362,10 @@ class Schematic():
                       'x': Variable(name + '_x'),
                       'min_x': None,
                       'y': Variable(name + '_y'),
-                      'min_y': None
+                      'min_y': None,
+                      'c': c,
+                      'p': p,
+                      'qf': qf
                       }
 
         # If user provides values, put them into the attributes dictionary
@@ -404,8 +424,8 @@ class Schematic():
 
         if name in self.dg.nodes:
             raise ValueError("Must provide a unique name")
-        if kind.lower() not in self.translation_strats:
-            raise ValueError("kind must be either %s" % self.translation_strats)
+        if "translate_" + kind.lower() not in self.translation_strats:
+            raise ValueError("kind %s must be either %s" % ("translate_" + kind.lower(), self.translation_strats))
 
         # Initialize fluid properties
         fluid_properties = Fluid(fluid_name)
