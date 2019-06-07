@@ -45,7 +45,7 @@ docker pull jsreid13/pymanifold:latest
 ```
 Run the single\_channel\_test,py script within this image using:
 ```
-docker container run -it --rm -v $(pwd):/tmp -v $(pwd)/src:/tmp/src -w /tmp -e PYTHONPATH=/tmp pymanifold:pip python3 tests/t_junction_test.py
+docker container run -it --rm -v $(pwd):/tmp -v $(pwd)/src:/tmp/src -w /tmp -e PYTHONPATH=/tmp jsreid13/pymanifold python3 tests/t_junction_test.py
 ```
 _Note: You need to run this command in your terminal while in the root of this repository_
 
@@ -133,16 +133,6 @@ epsilon : [1.797693134862315708e+308, 1.797693134862315708e+308]
 
 This project is still in development, features that need to be added are:
 
-* Add an elecrophoretic cross as a new node type with voltages at two ends and pressure driven flow on
-the other two short ends. Steps:
-  * Create a new translate method named translate\_ep\_cross
-    * This requires 4 connections, two must have a voltage constraint and the other two have a pressure
-	constraint
-	  * This will require the creation of a new port type that is a voltage input, currently only
-	  fluid injection ports exist with a pressure and flow rate, this will have a voltage and no flow
-	* Needs to append correct SMT expressions based on those in Stephen Chou's report to simulate an
-	electropheretic cross(EP cross) https://drive.google.com/open?id=1UF-Jun4-ppJHyb1wMQFqFzaUNbZSdkzl
-  * Add the name of that translation method to the translate\_nodes under the name ep\_cross
 * Feature to output electrical characteristics of chip to MapleSim(or something similar)
   * Produce Modelica code using [OMPython](https://github.com/OpenModelica/OMPython) 
   to feed into MapleSim
@@ -150,8 +140,6 @@ the other two short ends. Steps:
   * Fill in the content to match other readthedocs like [pysmt](http://pysmt.readthedocs.io)
   or [Jupyter](http://jupyter.readthedocs.io)
 * Gather a database of real world microfluidic chip designs and information about their output
-* Implement a machine learning algorithm on this database to improve the library's accuracy in
-determining if different designs will work
 * Implement abstraction refinement from original project
 
 ## Authors
@@ -162,6 +150,7 @@ determining if different designs will work
 * **Chris Willar** - *Contributor to Manifold* - [cwillgit](https://github.com/cwillgit)
 * **Shubham Verma** - *Contributor to Manifold* - [VermaSh](https://github.com/VermaSh)
 * **Yifan Mo** - *Contributor to Manifold* - [ymo13](https://github.com/ymo13)
+* **Devika Khosla** - *Contributor to Manifold* - [DevikaKhosla](https://github.com/DevikaKhosla)
 * **Tyson Andre** - *Contributor to Manifold* - [TysonAndre](https://github.com/TysonAndre)
 * **Max Chen** - *Contributor to Manifold* - [maxqchen](https://github.com/maxqchen)
 * **Nik Klassen** - *Contributor to Manifold* - [nikklassen](https://github.com/nikklassen)
