@@ -132,7 +132,6 @@ class Schematic():
                 min_length=False,
                 min_width=False,
                 min_height=False,
-                min_resolution=False,
                 kind='rectangle',
                 phase='None',
                 min_sampling_rate=1
@@ -165,7 +164,6 @@ class Schematic():
                                 min_length: 'positive number',
                                 min_width: 'positive number',
                                 min_height: 'positive number',
-                                min_resolution: 'positive number',
                                 kind: 'string',
                                 phase: 'string',
                                 min_sampling_rate: 'positive number'
@@ -196,8 +194,6 @@ class Schematic():
                       'min_width': min_width,
                       'height': Variable('_'.join([*name, 'height'])),
                       'min_height': min_height,
-                      'resolution': Variable('_'.join([*name, 'resolution'])),
-                      'min_resolution': min_resolution,
                       'flow_rate': Variable('_'.join([*name, 'flow_rate'])),
                       'droplet_volume': Variable('_'.join([*name, 'droplet_volume'])),
                       'viscosity': Variable('_'.join([*name, 'viscosity'])),
