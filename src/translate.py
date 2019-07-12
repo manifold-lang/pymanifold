@@ -385,18 +385,18 @@ def translate_ep_cross(dg, name, fluid_name = 'default'):
     # work in progress
     exprs = []
 
-	# Validate input
+    # Validate input
     if dg.size(name) != 4:
         raise ValueError("Electrophoretic Cross %s must have 4 connections" % name)
 
-	# Electrophoretic Cross is a type of node, so call translate node
+    # Electrophoretic Cross is a type of node, so call translate node
     translate_node(dg, name)
 
-	# Because it's done in translate_tjunc
+    # Because it's done in translate_tjunc
     ep_cross_node_name = name
 
-	# figure out which nodes are for sample injection and which are for separation channel
-	# assume single input node, 3 output nodes, one junction node
+    # figure out which nodes are for sample injection and which are for separation channel
+    # assume single input node, 3 output nodes, one junction node
     # assume separation and tail channels are specified by user
     phases = nx.get_edge_attributes(dg, 'phase')
     for edge, phase in phases.items():
@@ -406,7 +406,7 @@ def translate_ep_cross(dg, name, fluid_name = 'default'):
             anode_node_name = edge[1]
         elif phase == 'tail':
             tail_channel_name = edge
-            cathode_node_name = edge[ edge[0] == ep_cross_node_name ]  # returns whichever tuple element is NOT the ep_cross node
+            cathode_node_name = edge[edge[0] == ep_cross_node_name]  # returns whichever tuple element is NOT the ep_cross node
 
     # is there a better way to do this?
     node_kinds = nx.get_node_attributes(dg, 'kind')
@@ -422,20 +422,19 @@ def translate_ep_cross(dg, name, fluid_name = 'default'):
     # assert dimensions:
     # assert width and height of tail channel to be equal to separation channel
     exprs.append(algorithms.retrieve(dg, tail_channel_name, 'width') ==
-                algorithms.retrieve(dg, separation_channel_name, 'width'))
+                 algorithms.retrieve(dg, separation_channel_name, 'width'))
     exprs.append(algorithms.retrieve(dg, tail_channel_name, 'height') ==
-                algorithms.retrieve(dg, separation_channel_name, 'height'))
+                 algorithms.retrieve(dg, separation_channel_name, 'height'))
 
     # assert width and height of injection channel to be equal to waste channel
     exprs.append(algorithms.retrieve(dg, injection_channel_name, 'width') ==
-                algorithms.retrieve(dg, waste_channel_name, 'width'))
+                 algorithms.retrieve(dg, waste_channel_name, 'width'))
     exprs.append(algorithms.retrieve(dg, injection_channel_name, 'height') ==
-                algorithms.retrieve(dg, waste_channel_name, 'height'))
+                 algorithms.retrieve(dg, waste_channel_name, 'height'))
 
     # assert height of separation channel and injection channel are same
     exprs.append(algorithms.retrieve(dg, injection_channel_name, 'height') ==
                  algorithms.retrieve(dg, separation_channel_name, 'height'))
-
 
     # electric field
     E = Variable('E')
@@ -459,7 +458,7 @@ def translate_ep_cross(dg, name, fluid_name = 'default'):
         # check if something is defined, otherwise should be set to false
         if not values:
             raise ValueError('No values defined for %s in electrophoretic cross node %s'
-                %(property_name, ep_cross_node_name) )
+                             % (property_name, ep_cross_node_name))
 
         # make sure all the values are either ints or floats
         if not all(isinstance(x, (int, float)) for x in values):
@@ -474,18 +473,17 @@ def translate_ep_cross(dg, name, fluid_name = 'default'):
 
         if not (n_to_check == n):
             raise ValueError("Expecting %s values, and found %s for %s in node: '%s'"
-                             %(n, n_to_check, property_name, ep_cross_node_name))
+                             % (n, n_to_check, property_name, ep_cross_node_name))
 
     delta = algorithms.retrieve(dg, separation_channel_name, 'min_sampling_rate')
     x_detector = algorithms.retrieve(dg, separation_channel_name, 'x_detector')
 
-
     # These are currently set as parameters to the node function
     # all are constants, numbers between 0 and 1
     # brief descriptions:
-        # lower c, more discernable concentration peaks
-        # higher p, any given conc. peak must be higher (closer to max conc.)
-        # qf is arbitrary, rule of thumb qf = 0.9 (called q in Stephen Chou's paper)
+    # lower c, more discernable concentration peaks
+    # higher p, any given conc. peak must be higher (closer to max conc.)
+    # qf is arbitrary, rule of thumb qf = 0.9 (called q in Stephen Chou's paper)
     c = algorithms.retrieve(dg, ep_cross_node_name, 'c')
     p = algorithms.retrieve(dg, ep_cross_node_name, 'p')
     qf = algorithms.retrieve(dg, ep_cross_node_name, 'qf')
@@ -494,28 +492,27 @@ def translate_ep_cross(dg, name, fluid_name = 'default'):
     v = []
     t_peak = []
     t_min = []
-    W =  algorithms.retrieve(dg, injection_channel_name, 'width')
+    W = algorithms.retrieve(dg, injection_channel_name, 'width')
 
     # for each analyte
     for i in range(0, n):
         # calculate mobility
-        mu.append( Variable('mu_' + str(i)) )
-        exprs.append( mu[i] == algorithms.calculate_mobility(dg, separation_channel_name, q[i], r[i]) )
+        mu.append(Variable('mu_' + str(i)))
+        exprs.append(mu[i] == algorithms.calculate_mobility(dg, separation_channel_name, q[i], r[i]))
 
         # calculate velocity
-        v.append( Variable('v_' + str(i)) )
-        exprs.append( v[i] == algorithms.calculate_charged_particle_velocity(dg, mu[i], E) )
+        v.append(Variable('v_' + str(i)))
+        exprs.append(v[i] == algorithms.calculate_charged_particle_velocity(dg, mu[i], E))
 
         # calculate t_peak, initialize variables for t_min
-        t_peak.append( Variable('t_peak_' + str(i)) )
-        t_min.append( Variable('t_min_' + str(i)) )
-        exprs.append( t_peak[i] == x_detector/v[i] )
-
+        t_peak.append(Variable('t_peak_' + str(i)))
+        t_min.append(Variable('t_min_' + str(i)))
+        exprs.append(t_peak[i] == x_detector / v[i])
 
     # detector position is somewhere along the separation channel
     # assume x_detector ranges from 0 to length of channel
     # to get absolute position of detector, add x_detector to ep_cross_node position
-    exprs.append( x_detector <= algorithms.retrieve(dg, separation_channel_name, 'length') )
+    exprs.append(x_detector <= algorithms.retrieve(dg, separation_channel_name, 'length'))
 
     # C_negligible is the minimum concentration level
     # i.e. smallest concentration peak should be > C_negligible
@@ -526,17 +523,16 @@ def translate_ep_cross(dg, name, fluid_name = 'default'):
     # WARNING: THIS EQUATION IS WRONG
     # the current expression for sigma0 is wrong, adding it only to test the other equations
     # only have definition of sigma0 for round channels (sigma0 ~ r_channel/2.355)
-    exprs.append(sigma0 == W / (2*2.355))
-    exprs.append( C_floor == ( min(C0) / (sigma0 + (2*max(D) * x_detector / v[n-1])**0.5) ) )
-    exprs.append( C_negligible ==  p * C_floor )
-
+    exprs.append(sigma0 == W / (2 * 2.355))
+    exprs.append(C_floor == (min(C0) / (sigma0 + (2 * max(D) * x_detector / v[n - 1])**0.5)))
+    exprs.append(C_negligible == p * C_floor)
 
     diff = []
-    for i in range(0, n-1):
+    for i in range(0, n - 1):
 
         # constrain that time difference between peaks is large enough to be detected
         exprs.append(t_peak[i] + delta < t_min[i])
-        exprs.append(t_peak[i] + delta < t_min[i+1])
+        exprs.append(t_peak[i] + delta < t_min[i + 1])
 
         # constrain t_min to be where derivative of concentration is 0
         # if two adjacent peaks are close enough in height, then instead of using
@@ -544,16 +540,16 @@ def translate_ep_cross(dg, name, fluid_name = 'default'):
         # where i is the current analyte, and i+1 is the next analyte
         # and F = C(x_detector), C is concentration
         # quantify closeness of heights of peaks using the variable diff
-        diff.append( Variable('diff_' + str(i)) )
-        exprs.append( diff[i] == C0[i]/C0[i+1] * (D[i+1]*mu[i]/(D[i]*mu[i+1]))**0.5 )
+        diff.append(Variable('diff_' + str(i)))
+        exprs.append(diff[i] == C0[i] / C0[i + 1] * (D[i + 1] * mu[i] / (D[i] * mu[i + 1]))**0.5)
 
         # if 0.1 < diff < 10, then use expression Fi(tmin) = Fi+1(tmin)
         # otherwise use expression dFi/dt (tmin) + dFi+1/dt (tmin) = 0
-        t_min_constraint_expression = if_then_else( logical_and(0.1 < diff[i], diff[i] < 10),
+        t_min_constraint_expression = if_then_else(logical_and(0.1 < diff[i], diff[i] < 10),
             algorithms.calculate_concentration(dg, C0[i], D[i], W, v[i], x_detector, t_min[i]) -
-            algorithms.calculate_concentration(dg, C0[i+1], D[i+1], W, v[i+1], x_detector, t_min[i]),
-            (algorithms.calculate_concentration(dg, C0[i+1], D[i+1], W, v[i+1], x_detector, t_min[i])).Differentiate(t_min[i]) +
-            (algorithms.calculate_concentration(dg, C0[i+1], D[i+1], W, v[i+1], x_detector, t_min[i])).Differentiate(t_min[i])
+            algorithms.calculate_concentration(dg, C0[i + 1], D[i + 1], W, v[i + 1], x_detector, t_min[i]),
+            (algorithms.calculate_concentration(dg, C0[i + 1], D[i + 1], W, v[i + 1], x_detector, t_min[i])).Differentiate(t_min[i]) +
+            (algorithms.calculate_concentration(dg, C0[i + 1], D[i + 1], W, v[i + 1], x_detector, t_min[i])).Differentiate(t_min[i])
             )
 
         exprs.append(t_min_constraint_expression == 0)
@@ -573,8 +569,8 @@ def translate_ep_cross(dg, name, fluid_name = 'default'):
         # F(tmin, i)/F(tpeak, j) ~ ( Fi(tmin,i) + Fi+1(tmin, i) + (n-2)(1-q)/(n-3) ) / Fj(tpeak,j)
         exprs.append(
             (algorithms.calculate_concentration(dg, C0[i], D[i], W, v[i], x_detector, t_min[i]) +
-             algorithms.calculate_concentration(dg, C0[i+1], D[i+1], W, v[i+1], x_detector, t_min[i]) +
-             (n-2)*(1-qf)/(n-3) * C_negligible)
+             algorithms.calculate_concentration(dg, C0[i + 1], D[i + 1], W, v[i + 1], x_detector, t_min[i]) +
+             (n - 2) * (1 - qf)/(n - 3) * C_negligible)
              / (algorithms.calculate_concentration(dg, C0[i], D[i], W, v[i], x_detector, t_peak[i]))
              <= c
          )
@@ -582,9 +578,9 @@ def translate_ep_cross(dg, name, fluid_name = 'default'):
         # F(tmin, i)/(F(tmax, i+1)) <= c
         exprs.append(
             (algorithms.calculate_concentration(dg, C0[i], D[i], W, v[i], x_detector, t_min[i]) +
-             algorithms.calculate_concentration(dg, C0[i+1], D[i+1], W, v[i+1], x_detector, t_min[i]) +
-             (n-2)*(1-qf)/(n-3) * C_negligible)
-             / (algorithms.calculate_concentration(dg, C0[i+1], D[i+1], W, v[i+1], x_detector, t_peak[i+1]))
+             algorithms.calculate_concentration(dg, C0[i + 1], D[i + 1], W, v[i + 1], x_detector, t_min[i]) +
+             (n - 2) * (1 - qf) / (n - 3) * C_negligible)
+             / (algorithms.calculate_concentration(dg, C0[i + 1], D[i + 1], W, v[i + 1], x_detector, t_peak[i + 1]))
              <= c
             )
 
@@ -600,6 +596,7 @@ def translate_ep_cross(dg, name, fluid_name = 'default'):
                                                                          )](dg, anode_node_name)]
 
     return exprs
+
 
 translation_strats = {'input': translate_input,
                       'output': translate_output,
