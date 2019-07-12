@@ -60,7 +60,7 @@ The code to create a simple T-Junction droplet generator is as follows found in 
 ```python
 import src.pymanifold as pymf
 
-sch = pymf.Schematic([0, 0, 10, 10])
+sch = pymf.Schematic([0, 0, 1, 1])
 #       D
 #       |
 #   C---N---O
@@ -71,76 +71,77 @@ junction_node = 't_j'
 
 # Continuous and output node should have same flow rate
 # syntax: sch.port(name, design[, pressure, flow_rate, density, X_pos, Y_pos])
-sch.port(continuous_node, 'input', min_pressure=1, fluid_name='mineraloil')
-sch.port(dispersed_node, 'input', min_pressure=1, fluid_name='water')
-sch.port(output_node, 'output')
+sch.port(continuous_node, kind='input', fluid_name='mineraloil')
+sch.port(dispersed_node, kind='input', fluid_name='water')
+sch.port(output_node, kind='output')
 
 # syntax: sch.node(name, X_pos, Y_pos, kind='node')
-sch.node(junction_node, 1, 0, kind='t-junction')
+sch.node(junction_node, kind='tjunc')
 
 # syntax: sch.channel(shape, min_length, width, height, input, output)
-sch.channel(junction_node, output_node, phase='output')
-sch.channel(continuous_node, junction_node, phase='continuous')
-sch.channel(dispersed_node, junction_node, phase='dispersed')
+sch.channel(junction_node, output_node, min_height=0.0002, min_width=0.00021, phase='output')
+sch.channel(continuous_node, junction_node, min_height=0.0002, min_width=0.00021, phase='continuous')
+sch.channel(dispersed_node, junction_node, min_height=0.0002, min_width=0.00021, phase='dispersed')
 
 print(sch.solve())
 ```
+
 Output:\
-continuous_viscosity : [4.494232837155789769e+307, 4.494232837155789769e+307]\
-continuous_pressure : [1, 1]\
-continuous_flow_rate : [1.518258991506101335e-158, 1.518258991506101538e-158]\
-continuous_density : [1.797693134862315708e+308, 1.797693134862315708e+308]\
-continuous_x : [8.281615407309315018e-12, 9.937377602372895258e-12]\
-continuous_y : [5, 5.000000000003019807]\
-dispersed_viscosity : [4.494232837155789769e+307, 4.494232837155789769e+307]\
-dispersed_pressure : [1, 1]\
-dispersed_flow_rate : [2.101318454051882251e-158, 2.101318454051882655e-158]\
-dispersed_density : [1.35216994135785263e+308, 1.35216994135785263e+308]\
-dispersed_x : [4.999999999996980193, 5]\
-dispersed_y : [9.999999999996980193, 10]\
-out_viscosity : [4.494232837155789769e+307, 4.494232837155789769e+307]\
-out_pressure : [1.797693134862315708e+308, 1.797693134862315708e+308]\
-out_flow_rate : [3.619577445557983788e-158, 3.619577445557984193e-158]\
-out_density : [3.370674627866841329e+307, 3.370674627866841329e+307]\
-out_x : [2.500406901035603369, 2.500406901037877105]\
-out_y : [7.499594818069040159, 7.499594818071313895]\
-t_j_pressure : [1.797693134862315509e+308, 1.797693134862315509e+308]\
-t_j_viscosity : [4.494232837155789769e+307, 4.494232837155789769e+307]\
-t_j_density : [3.370674627866841329e+307, 3.370674627866841329e+307]\
-t_j_x : [3.31275985767466778e-12, 6.331823954042192781e-12]\
-t_j_y : [4.999999999993668176, 4.999999999996687983]\
-t_j_out_width : [0.4993559777345346617, 0.4993559777345347173]\
-t_j_out_height : [0.0003451038031080025511, 0.0003451038031080026053]\
-t_j_out_flow_rate : [3.619577445557983788e-158, 3.619577445557984193e-158]\
-t_j_out_droplet_volume : [1.741515224397868536e+308, 1.741515224397868536e+308]\
-t_j_out_resistance : [-1.741515224397868536e+308, -1.741515224397868536e+308]\
-continuous_t_j_length : [6.624617698794350717e-12, 6.624617698794351525e-12]\
-continuous_t_j_width : [0.4993559777345346617, 0.4993559777345347173]\
-continuous_t_j_height : [0.0003451038031080025511, 0.0003451038031080026053]\
-continuous_t_j_flow_rate : [1.518258991506101335e-158, 1.518258991506101538e-158]\
-continuous_t_j_viscosity : [4.494232837155789769e+307, 4.494232837155789769e+307]\
-continuous_t_j_resistance : [1.741515224397868536e+308, 1.741515224397868536e+308]\
-dispersed_t_j_length : [7.071067811865476394, 7.071067811865477282]\
-dispersed_t_j_width : [0.5006598565867919071, 0.5006598565867920181]\
-dispersed_t_j_height : [0.0003451038031080025511, 0.0003451038031080026053]\
-dispersed_t_j_flow_rate : [2.101318454051882251e-158, 2.101318454051882655e-158]\
-dispersed_t_j_viscosity : [4.494232837155789769e+307, 4.494232837155789769e+307]\
-dispersed_t_j_resistance : [1.797693134862315708e+308, 1.797693134862315708e+308]\
-epsilon : [1.685337313933419667e+307, 1.685337313933419667e+307]\
-epsilon : [1.797693134862315708e+308, 1.797693134862315708e+308]
+continuous\_viscosity : [0.0003050999999999999893, 0.0003050999999999999893]\
+continuous\_pressure : [500.2152984093409032, 501.8325784839180415]\
+continuous\_flow\_rate : [4.696753629886489994e-08, 4.704340199341540629e-08]\
+continuous\_density : [800, 800]\
+continuous\_x : [0.9999999995343387127, 1]\
+continuous\_y : [0, 4.635954403007642003e-11]\
+dispersed\_viscosity : [0.001000000000000000021, 0.001000000000000000021]\
+dispersed\_pressure : [984782.4393873409135, 984784.0566674155416]\
+dispersed\_flow\_rate : [1.864071931417897898e-06, 1.864073462073317849e-06]\
+dispersed\_density : [999.8700000000000045, 999.8700000000000045]\
+dispersed\_x : [0.9999999995343387127, 1]\
+dispersed\_y : [0, 4.635954403007642003e-11]\
+out\_viscosity : [0.0003050999999999999893, 0.0003050999999999999893]\
+out\_pressure : [983856.6639627817785, 983858.2812428564066]\
+out\_flow\_rate : [1.911039467716762791e-06, 1.911116864066733473e-06]\
+out\_density : [999.8700000000000045, 999.8700000000000045]\
+out\_x : [0.9999999995343387127, 1]\
+out\_y : [0, 4.635954403007642003e-11]\
+t\_j\_pressure : [984373.6733107801992, 984375.2905908548273]\
+t\_j\_flow\_rate : [1.911039467716762791e-06, 1.911116864066733473e-06]\
+t\_j\_viscosity : [65.62503437499998427, 68.75003124999999216]\
+t\_j\_density : [999.8700000000000045, 999.8700000000000045]\
+t\_j\_x : [0.9999999995343387127, 1]\
+t\_j\_y : [8.849630305854020956e-10, 9.313225746154785156e-10]\
+t\_j\_out\_length : [1.000000000000000269e-09, 1.041250292910165269e-09]\
+t\_j\_out\_width : [0.0002100000000000000087, 0.0002100000000000000087]\
+t\_j\_out\_height : [0.0002000000000000000096, 0.0002000000000000000096]\
+t\_j\_out\_flow\_rate : [1.911039467716762791e-06, 1.911116864066733473e-06]\
+t\_j\_out\_droplet\_volume : [4.054812791117536518e-10, 4.061243617092562122e-10]\
+t\_j\_out\_viscosity : [65.62503437499998427, 68.75003124999999216]\
+t\_j\_out\_resistance : [270538289.0999316573, 270538292.8252219558]\
+continuous\_t\_j\_length : [1.000000000000000269e-09, 1.041250292910165269e-09]\
+continuous\_t\_j\_width : [0.0002100000000000000087, 0.0002100000000000000087]\
+continuous\_t\_j\_height : [0.0002000000000000000096, 0.0002000000000000000096]\
+continuous\_t\_j\_flow\_rate : [4.696753629886489994e-08, 4.704340199341540629e-08]\
+continuous\_t\_j\_viscosity : [0.0003050999999999999893, 0.0003050999999999999893]\
+continuous\_t\_j\_resistance : [588836707.1747778654, 588836709.0374230146]\
+dispersed\_t\_j\_length : [1.000000000000000269e-09, 1.041250292910165269e-09]\
+dispersed\_t\_j\_width : [0.0002100000000000000087, 0.0002100000000000000087]\
+dispersed\_t\_j\_height : [0.0002000000000000000096, 0.0002000000000000000096]\
+dispersed\_t\_j\_flow\_rate : [1.864071931417897898e-06, 1.864073462073317849e-06]\
+dispersed\_t\_j\_viscosity : [0.001000000000000000021, 0.001000000000000000021]\
+dispersed\_t\_j\_resistance : [473663290.9625768065, 473663292.8252219558]\
+epsilon : [2.099999999999999799e-06, 2.100000000000000223e-06]\
+epsilon : [2.099999999999999799e-06, 2.100000000000000223e-06]
 
 ## Development
 
 This project is still in development, features that need to be added are:
 
-* Feature to output electrical characteristics of chip to MapleSim(or something similar)
+* Create models of more components in Modelica to simulate in MapleSim
   * Produce Modelica code using [OMPython](https://github.com/OpenModelica/OMPython) 
-  to feed into MapleSim
 * Create a website to outline usage using [read the docs](https://readthedocs.org/)
   * Fill in the content to match other readthedocs like [pysmt](http://pysmt.readthedocs.io)
   or [Jupyter](http://jupyter.readthedocs.io)
-* Gather a database of real world microfluidic chip designs and information about their output
-* Implement abstraction refinement from original project
 
 ## Authors
 
@@ -151,6 +152,7 @@ This project is still in development, features that need to be added are:
 * **Shubham Verma** - *Contributor to Manifold* - [VermaSh](https://github.com/VermaSh)
 * **Yifan Mo** - *Contributor to Manifold* - [ymo13](https://github.com/ymo13)
 * **Devika Khosla** - *Contributor to Manifold* - [DevikaKhosla](https://github.com/DevikaKhosla)
+* **Ali Abdullah** - *Contributor to Manifold* - [ali-abdullah](https://github.com/ali-abdullah)
 * **Tyson Andre** - *Contributor to Manifold* - [TysonAndre](https://github.com/TysonAndre)
 * **Max Chen** - *Contributor to Manifold* - [maxqchen](https://github.com/maxqchen)
 * **Nik Klassen** - *Contributor to Manifold* - [nikklassen](https://github.com/nikklassen)
