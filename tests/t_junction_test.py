@@ -24,7 +24,7 @@ sch.channel(continuous_node, junction_node, min_height=0.0002, min_width=0.00021
 sch.channel(dispersed_node, junction_node, min_height=0.0002, min_width=0.00021, phase='dispersed')
 
 #  sch.solve()
-model = sch.solve(show=True)
+model = sch.solve()
 print(model)
 
 
