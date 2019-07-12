@@ -43,17 +43,14 @@ def translate_node(dg, name):
         output_pressure_formulas = [a + b for a, b in
                                     zip(output_pressures,
                                         output_pressures[1:])]
-        exprs.append(algorithms.retrieve(dg, name, 'pressure') ==
-                     logical_and(*output_pressure_formulas))
+        exprs.append(algorithms.retrieve(dg, name, 'pressure') == logical_and(*output_pressure_formulas))
 
     if algorithms.retrieve(dg, name, 'min_x'):
-        exprs.append(algorithms.retrieve(dg, name, 'x') ==
-                     algorithms.retrieve(dg, name, 'min_x'))
+        exprs.append(algorithms.retrieve(dg, name, 'x') == algorithms.retrieve(dg, name, 'min_x'))
     else:
         exprs.append(algorithms.retrieve(dg, name, 'x') >= 0)
     if algorithms.retrieve(dg, name, 'min_y'):
-        exprs.append(algorithms.retrieve(dg, name, 'y') ==
-                     algorithms.retrieve(dg, name, 'min_y'))
+        exprs.append(algorithms.retrieve(dg, name, 'y') == algorithms.retrieve(dg, name, 'min_y'))
     else:
         exprs.append(algorithms.retrieve(dg, name, 'y') >= 0)
     # If parameters are provided by the user, then set the
@@ -62,26 +59,26 @@ def translate_node(dg, name):
         # If min_pressure has a value then a user defined value was provided
         # and this variable is set equal to this value, else simply set its
         # value to be >0, same for viscosity, pressure, flow_rate, X, Y and density
-        exprs.append(algorithms.retrieve(dg, name, 'pressure') ==
-                     algorithms.retrieve(dg, name, 'min_pressure'))
+        exprs.append(algorithms.retrieve(dg, name, 'pressure') == algorithms.retrieve(dg, name, 'min_pressure'))
     else:
-        exprs.append(algorithms.retrieve(dg, name, 'pressure') > 0)
+        exprs.append(algorithms.retrieve(dg, name, 'pressure') > 0.000001)  # Force pressure to be greater than 1uPa
+        exprs.append(algorithms.retrieve(dg, name, 'pressure') < 1000000)  # Force pressure to be less than 1MPa
     if algorithms.retrieve(dg, name, 'min_flow_rate'):
-        exprs.append(algorithms.retrieve(dg, name, 'flow_rate') ==
-                     algorithms.retrieve(dg, name, 'min_flow_rate'))
+        exprs.append(algorithms.retrieve(dg, name, 'flow_rate') == algorithms.retrieve(dg, name, 'min_flow_rate'))
     else:
-        exprs.append(algorithms.retrieve(dg, name, 'flow_rate') > 0)
+        exprs.append(algorithms.retrieve(dg, name, 'flow_rate') > 0.000000000001)  # Force flow rate to be greater than 1nL/s
+        exprs.append(algorithms.retrieve(dg, name, 'flow_rate') < 0.001)  # Force flow rate to be less than 1L/s
     if algorithms.retrieve(dg, name, 'min_viscosity'):
-        exprs.append(algorithms.retrieve(dg, name, 'viscosity') ==
-                     algorithms.retrieve(dg, name, 'min_viscosity'))
+        exprs.append(algorithms.retrieve(dg, name, 'viscosity') == algorithms.retrieve(dg, name, 'min_viscosity'))
     else:
-        exprs.append(algorithms.retrieve(dg, name, 'viscosity') > 0)
+        exprs.append(algorithms.retrieve(dg, name, 'viscosity') > 0.0001)  # Liquid helium is 0.000158
+        exprs.append(algorithms.retrieve(dg, name, 'viscosity') < 100)  # Force viscosity to be less than 100Pa*s
 
     if algorithms.retrieve(dg, name, 'min_density'):
-        exprs.append(algorithms.retrieve(dg, name, 'density') ==
-                     algorithms.retrieve(dg, name, 'min_density'))
+        exprs.append(algorithms.retrieve(dg, name, 'density') == algorithms.retrieve(dg, name, 'min_density'))
     else:
-        exprs.append(algorithms.retrieve(dg, name, 'density') > 0)
+        exprs.append(algorithms.retrieve(dg, name, 'density') > 500)  # No liquid should be below this density
+        exprs.append(algorithms.retrieve(dg, name, 'density') < 2000)  # Force density for be less than 2000kg/m^3
 
     densities = []
     for node_in in dg.pred[name]:
@@ -90,8 +87,7 @@ def translate_node(dg, name):
     # If they are all equal, then set this node to be that density if there is a value
     # TODO: Create case for when different densities come in
     if densities and densities[1:] == densities[:-1]:
-        exprs.append(algorithms.retrieve(dg, name, 'density') ==
-                     algorithms.retrieve(dg, list(dg.pred[name].keys())[0], 'density'))
+        exprs.append(algorithms.retrieve(dg, name, 'density') == algorithms.retrieve(dg, list(dg.pred[name].keys())[0], 'density'))
     # To recursively traverse, call on all successor channels
     for node_out in dg.succ[name]:
         [exprs.append(val) for val in translation_strats[
@@ -121,8 +117,6 @@ def translate_input(dg, name):
     # if not specified by user
     if not algorithms.retrieve(dg, name, 'min_flow_rate'):
         exprs.append(algorithms.calculate_port_flow_rate(dg, name))
-    # TODO: Come up with a reasonable maximum pressure
-    exprs.append((algorithms.retrieve(dg, name, 'flow_rate') < 100))
 
     # To recursively traverse, call on all successor channels
     #  for node_out in dg.succ[name]:
@@ -163,8 +157,7 @@ def translate_output(dg, name):
         else:
             total_flow_in_formulas = [a + b for a, b in
                                       zip(total_flow_in, total_flow_in[1:])]
-            exprs.append(algorithms.retrieve(dg, name, 'flow_rate') ==
-                         logical_and(*total_flow_in_formulas))
+            exprs.append(algorithms.retrieve(dg, name, 'flow_rate') == logical_and(*total_flow_in_formulas))
     return exprs
 
 
@@ -191,43 +184,30 @@ def translate_channel(dg, name):
     # provided number if provided, else assert that the length be greater
     # than 0, same for width and height
     if algorithms.retrieve(dg, name, 'min_length'):
-        exprs.append(algorithms.retrieve(dg, name, 'length') ==
-                     algorithms.retrieve(dg, name, 'min_length'))
+        exprs.append(algorithms.retrieve(dg, name, 'length') == algorithms.retrieve(dg, name, 'min_length'))
     else:
-        exprs.append(algorithms.retrieve(dg, name, 'length') > 0)
+        exprs.append(algorithms.retrieve(dg, name, 'length') > 0.000000001)  # Force to be greater than 1nm
+        exprs.append(algorithms.retrieve(dg, name, 'length') < 1)  # Force to be less than 1m
 
     if algorithms.retrieve(dg, name, 'min_width'):
-        exprs.append(algorithms.retrieve(dg, name, 'width') ==
-                     algorithms.retrieve(dg, name, 'min_width'))
+        exprs.append(algorithms.retrieve(dg, name, 'width') == algorithms.retrieve(dg, name, 'min_width'))
     else:
-        exprs.append(algorithms.retrieve(dg, name, 'width') > 0)
-    if algorithms.retrieve(dg, name, 'min_resolution'):
-        exprs.append(algorithms.retrieve(dg, name, 'width') <
-                     algorithms.retrieve(dg, name, 'min_resolution'))
-    else:
-        # Set default to be less than 0.0001m
-        exprs.append(algorithms.retrieve(dg, name, 'width') < 1)
+        exprs.append(algorithms.retrieve(dg, name, 'width') > 0.000000001)  # Force to be greater than 1nm
+        exprs.append(algorithms.retrieve(dg, name, 'width') < 0.01)  # Force to be less than 1cm
 
     if algorithms.retrieve(dg, name, 'min_height'):
-        exprs.append(algorithms.retrieve(dg, name, 'height') ==
-                     algorithms.retrieve(dg, name, 'min_height'))
+        exprs.append(algorithms.retrieve(dg, name, 'height') == algorithms.retrieve(dg, name, 'min_height'))
     else:
-        # Set default to be greater than 1um
-        exprs.append(algorithms.retrieve(dg, name, 'height') > 0.000001)
-    if algorithms.retrieve(dg, name, 'min_depth'):
-        exprs.append(algorithms.retrieve(dg, name, 'height') <
-                     algorithms.retrieve(dg, name, 'min_depth'))
-    else:
-        # Set default to be less than 0.001m
-        exprs.append(algorithms.retrieve(dg, name, 'height') < 0.001)
+        exprs.append(algorithms.retrieve(dg, name, 'height') > 0.000000001)  # Force to be greater than 1nm
+        exprs.append(algorithms.retrieve(dg, name, 'height') < 0.01)  # Force to be less than 1cm
 
     # Assert that viscosity in channel equals input node viscosity
     # Set output viscosity to equal input since this should be constant
     # This must be performed before calculating resistance
     exprs.append(algorithms.retrieve(dg, name, 'viscosity') ==
                  algorithms.retrieve(dg, algorithms.retrieve(dg, name, 'port_from'), 'viscosity'))
-    exprs.append(algorithms.retrieve(dg, algorithms.retrieve(dg, name, 'port_to'), 'viscosity') ==
-                 algorithms.retrieve(dg, algorithms.retrieve(dg, name, 'port_from'), 'viscosity'))
+    #  exprs.append(algorithms.retrieve(dg, algorithms.retrieve(dg, name, 'port_to'), 'viscosity') ==
+    #               algorithms.retrieve(dg, algorithms.retrieve(dg, name, 'port_from'), 'viscosity'))
 
     # Pressure at end of channel is lower based on the resistance of
     # the channel as calculated by calculate_channel_resistance and
@@ -239,17 +219,16 @@ def translate_channel(dg, name):
     # equation for the resistance, then assert resistance is >0
     exprs.append(resistance_list[0])
     resistance = resistance_list[1]
-    exprs.append(algorithms.retrieve(dg, name, 'resistance') == resistance)
+    #  exprs.append(algorithms.retrieve(dg, name, 'resistance') == resistance)
     exprs.append(algorithms.retrieve(dg, name, 'resistance') > 0)
+    exprs.append(algorithms.retrieve(dg, name, 'resistance') < 1000000000)  # Based on max pressure of 1MPa and flow rate of 0.001m^3/s
 
     # Assert flow rate equal to the flow rate coming in
-    exprs.append(algorithms.retrieve(dg, name, 'flow_rate') ==
-                 algorithms.retrieve(dg, algorithms.retrieve(dg, name, 'port_from'), 'flow_rate'))
+    exprs.append(algorithms.retrieve(dg, name, 'flow_rate') == algorithms.retrieve(dg, algorithms.retrieve(dg, name, 'port_from'), 'flow_rate'))
 
     # Channels do not have pressure because it decreases across channel
     # Call translate on the output to continue traversing the channel
-    [exprs.append(val) for val in translation_strats[algorithms.retrieve(dg,
-        algorithms.retrieve(dg, name, 'port_to'), 'kind')]\
+    [exprs.append(val) for val in translation_strats[algorithms.retrieve(dg, algorithms.retrieve(dg, name, 'port_to'), 'kind')]
         (dg, algorithms.retrieve(dg, name, 'port_to'))]
     return exprs
 
@@ -272,7 +251,7 @@ def translate_tjunc(dg, name, crit_crossing_angle=0.5):
         raise ValueError("T-junction %s must have 3 connections" % name)
 
     # Since T-junction is just a specialized node, call translate node
-    translate_node(dg, name)
+    [exprs.append(val) for val in translate_node(dg, name)]
 
     # Renaming for consistency with the other nodes
     junction_node_name = name
@@ -315,8 +294,9 @@ def translate_tjunc(dg, name, crit_crossing_angle=0.5):
             raise ValueError("Invalid phase for T-junction: %s" % name)
 
     # Epsilon, sharpness of T-junc, must be greater than 0
+    # epsilon = 0.01*w for liquid droplets from Steijn et al.
     epsilon = Variable('epsilon')
-    exprs.append(epsilon >= 0)
+    exprs.append(epsilon == algorithms.retrieve(dg, continuous_channel_name, 'width') * 0.01)
 
     # TODO: Figure out why original had this cause it doesn't seem true
     #  # Pressure at each of the 4 nodes must be equal
