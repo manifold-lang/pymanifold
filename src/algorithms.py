@@ -329,7 +329,8 @@ def erf_approximation(x):
     a3 = 0.000972
     a4 = 0.078108
 
-    return (1 - (1 + a1 * x + a2 * x**2 + a3 * x**3 + a4 * x**4)**(-4))
+    # TODO: Replace this with 1-(a1t+a2t+a3t)*exp(x^2), this takes too long for dReal to solve
+    return (1 - (1 + a1 * x))  # + a2 * x**2 + a3 * x**3 + a4 * x**4)**(-4))
 
 
 def calculate_concentration(dg, C0, D, W, v, x, t):
