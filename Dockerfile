@@ -9,9 +9,9 @@ RUN wget https://bootstrap.pypa.io/get-pip.py \
     && python3 get-pip.py
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
-# Install OpenModellica
-RUN for deb in deb deb-src; do echo "$deb http://build.openmodelica.org/apt `awk -F"[)(]+" '/VERSION=/ {print $2}' /etc/os-release | awk '{print $1}' | awk '{ print tolower($0) }'` stable"; done | tee /etc/apt/sources.list.d/openmodelica.list
-RUN wget -q http://build.openmodelica.org/apt/openmodelica.asc -O- | apt-key add - \
-    && apt update \
-    && apt install -y --no-install-recommends openmodelica \
-    && python3 -m pip install -U https://github.com/OpenModelica/OMPython/archive/master.zip
+# Install OpenModellica, uncomment if you want to use
+# RUN for deb in deb deb-src; do echo "$deb http://build.openmodelica.org/apt `awk -F"[)(]+" '/VERSION=/ {print $2}' /etc/os-release | awk '{print $1}' | awk '{ print tolower($0) }'` stable"; done | tee /etc/apt/sources.list.d/openmodelica.list
+# RUN wget -q http://build.openmodelica.org/apt/openmodelica.asc -O- | apt-key add - \
+#     && apt update \
+#     && apt install -y --no-install-recommends openmodelica \
+#     && python3 -m pip install -U https://github.com/OpenModelica/OMPython/archive/master.zip
