@@ -374,7 +374,8 @@ def translate_tjunc(dg, name, crit_crossing_angle=0.5):
                                                                          )](dg, output_node_name)]
     return exprs
 
-def translate_ep_cross(dg, name, fluid_name = 'default'):
+
+def translate_ep_cross(dg, name, fluid_name='default'):
     """Create SMT expressions for an electrophoretic cross
     :param str name: the name of the junction node in the electrophoretic cross
     :returns: None -- no issues with translating channel parameters to SMT
@@ -390,7 +391,7 @@ def translate_ep_cross(dg, name, fluid_name = 'default'):
         raise ValueError("Electrophoretic Cross %s must have 4 connections" % name)
 
     # Electrophoretic Cross is a type of node, so call translate node
-    translate_node(dg, name)
+    [exprs.append(val) for val in translate_node(dg, name)]
 
     # Because it's done in translate_tjunc
     ep_cross_node_name = name
@@ -438,6 +439,8 @@ def translate_ep_cross(dg, name, fluid_name = 'default'):
 
     # electric field
     E = Variable('E')
+    exprs.append(E < 1000000)
+    exprs.append(E > 0)
     exprs.append(E == algorithms.calculate_electric_field(dg, anode_node_name, cathode_node_name))
     # only works if cathode is an input?  only works for paths that are true in directed graph
 
@@ -462,8 +465,8 @@ def translate_ep_cross(dg, name, fluid_name = 'default'):
 
         # make sure all the values are either ints or floats
         if not all(isinstance(x, (int, float)) for x in values):
-            raise TypeError("%s values in electrophoretic cross node '%s' must be numbers" %
-                            (property_name, ep_cross_node_name))
+            raise TypeError("%s values in electrophoretic cross node '%s' must be numbers"
+                            % (property_name, ep_cross_node_name))
 
     # n = number of analytes
     n = len(D)
@@ -498,15 +501,23 @@ def translate_ep_cross(dg, name, fluid_name = 'default'):
     for i in range(0, n):
         # calculate mobility
         mu.append(Variable('mu_' + str(i)))
+        exprs.append(mu[i] < 10000000000)
+        exprs.append(mu[i] > 0)
         exprs.append(mu[i] == algorithms.calculate_mobility(dg, separation_channel_name, q[i], r[i]))
 
         # calculate velocity
         v.append(Variable('v_' + str(i)))
+        #  exprs.append(v[i] < 1)
+        exprs.append(v[i] > 0)
         exprs.append(v[i] == algorithms.calculate_charged_particle_velocity(dg, mu[i], E))
 
         # calculate t_peak, initialize variables for t_min
         t_peak.append(Variable('t_peak_' + str(i)))
         t_min.append(Variable('t_min_' + str(i)))
+        exprs.append(t_peak[i] < 1000000)
+        exprs.append(t_peak[i] > 0)
+        exprs.append(t_min[i] < 1000000)
+        exprs.append(t_min[i] > 0)
         exprs.append(t_peak[i] == x_detector / v[i])
 
     # detector position is somewhere along the separation channel
@@ -520,9 +531,8 @@ def translate_ep_cross(dg, name, fluid_name = 'default'):
     C_floor = Variable('C_floor')
     sigma0 = Variable('sigma0')
 
-    # WARNING: THIS EQUATION IS WRONG
-    # the current expression for sigma0 is wrong, adding it only to test the other equations
-    # only have definition of sigma0 for round channels (sigma0 ~ r_channel/2.355)
+    # TODO: This equation for sigma0 is for round, should add rectangular as well
+    # definition of sigma0 for round channels (sigma0 ~ r_channel/2.355)
     exprs.append(sigma0 == W / (2 * 2.355))
     exprs.append(C_floor == (min(C0) / (sigma0 + (2 * max(D) * x_detector / v[n - 1])**0.5)))
     exprs.append(C_negligible == p * C_floor)
@@ -563,7 +573,7 @@ def translate_ep_cross(dg, name, fluid_name = 'default'):
         # I don't know how to use the min function in dreal, so I figured an
         #  equivalent but less efficient way to do it is just to ensure it is
         #  less than Fi(t_peaki), for every i
-        # exprs.append( C_negligible < p*algorithms.calculate_concentration(dg, C0[i], D[i], W, v[i], x_detector, t_peak[i]))
+        #  exprs.append(C_negligible < p * algorithms.calculate_concentration(dg, C0[i], D[i], W, v[i], x_detector, t_peak[i]))
 
         # F(tmin, i)/(F(tmax, i)) <= c
         # F(tmin, i)/F(tpeak, j) ~ ( Fi(tmin,i) + Fi+1(tmin, i) + (n-2)(1-q)/(n-3) ) / Fj(tpeak,j)
