@@ -31,4 +31,4 @@ sch.channel(junction_node, anode_node, min_height=0.0002, min_width=0.00021, min
 sch.channel(input_node, junction_node, min_height=0.0002, min_width=0.00021)
 sch.channel(junction_node, waste_node, min_height=0.0002, min_width=0.00021)
 
-print(sch.solve(show=True))
+print(sch.solve())
