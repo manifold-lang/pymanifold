@@ -6,7 +6,7 @@ import networkx as nx
 #  dReal SMT solver
 from dreal.symbolic import Variable, logical_and
 from dreal.api import CheckSatisfiability
-from OMPython import ModelicaSystem
+#  from OMPython import ModelicaSystem
 
 from src import constants, translate
 
@@ -605,15 +605,15 @@ class Schematic():
         with open(path, 'w') as outfile:
             json.dump(manifold_ir, outfile, separators=(',', ':'))
 
-    def to_modelica(self):
-        """Convert the schematic to a valid Modelica file
-        :returns: None
-        """
-        mod = ModelicaSystem("TJunctionSingleDrop.mo",
-                             "TJunctionSingleDrop",
-                             ["Modelica"]
-                             )
-        return mod.getQuantities()
+    #  def to_modelica(self):
+    #      """Convert the schematic to a valid Modelica file
+    #      :returns: None
+    #      """
+    #      mod = ModelicaSystem("TJunctionSingleDrop.mo",
+    #                           "TJunctionSingleDrop",
+    #                           ["Modelica"]
+    #                           )
+    #      return mod.getQuantities()
 
 
 if __name__ == '__main__':
